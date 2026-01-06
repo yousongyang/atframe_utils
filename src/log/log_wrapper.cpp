@@ -93,13 +93,13 @@ ATFRAMEWORK_UTILS_API log_wrapper::log_wrapper()
   options_.set(options_t::OPT_IS_GLOBAL, true);
 
   update();
-  prefix_format_ = "[Log %L][%F %T.%f][%s:%n(%C)]: ";
+  prefix_format_ = "[%F %T.%f][%L](%k:%n): ";
 }
 
 ATFRAMEWORK_UTILS_API log_wrapper::log_wrapper(construct_helper_t &)
     : log_level_(level_t::LOG_LW_DISABLED), stacktrace_level_(level_t::LOG_LW_DISABLED, level_t::LOG_LW_DISABLED) {
   // 这个接口由create_user_logger调用，不设置OPT_IS_GLOBAL
-  prefix_format_ = "[Log %L][%F %T.%f][%s:%n(%C)]: ";
+  prefix_format_ = "[%F %T.%f][%L](%k:%n): ";
 }
 
 ATFRAMEWORK_UTILS_API log_wrapper::~log_wrapper() {
@@ -172,15 +172,13 @@ ATFRAMEWORK_UTILS_API void log_wrapper::clear_sinks() {
   log_sinks_.clear();
 }
 
-ATFRAMEWORK_UTILS_API void log_wrapper::set_stacktrace_level(level_t::type level_max, level_t::type level_min) {
+ATFRAMEWORK_UTILS_API void log_wrapper::set_stacktrace_level(level_t::type level_min, level_t::type level_max) {
   stacktrace_level_.first = level_min;
   stacktrace_level_.second = level_max;
 
   // make sure first <= second
-  if (stacktrace_level_.second < stacktrace_level_.first) {
-    level_t::type tmp = stacktrace_level_.second;
-    stacktrace_level_.second = stacktrace_level_.first;
-    stacktrace_level_.first = tmp;
+  if (stacktrace_level_.first > stacktrace_level_.second) {
+    stacktrace_level_.first = stacktrace_level_.second;
   }
 }
 
