@@ -456,6 +456,72 @@ int run_event_on_start() { return test_manager::me().run_event_on_start(); }
 
 int run_event_on_exit() { return test_manager::me().run_event_on_exit(); }
 
+static std::vector<std::string> split_filter_pattern(const std::string &filter) {
+  std::vector<std::string> patterns;
+  size_t start = 0;
+  size_t end = 0;
+  while ((end = filter.find('*', start)) != std::string::npos) {
+    patterns.push_back(filter.substr(start, end - start));
+    start = end + 1;
+  }
+  if (start < filter.size()) {
+    patterns.push_back(filter.substr(start));
+  }
+  return patterns;
+}
+
+static bool match_name_pattern(const std::string &name, const std::vector<std::string> &patterns) {
+  size_t pos = 0;
+  for (const auto &pattern : patterns) {
+    size_t found = name.find(pattern, pos);
+    if (found == std::string::npos) {
+      return false;
+    }
+    pos = found + pattern.size();
+  }
+  return true;
+}
+
+static void append_filter_case(std::vector<std::string> &run_cases, const std::vector<std::string> &filter) {
+  if (filter.empty()) {
+    return;
+  }
+
+  std::vector<std::vector<std::string>> split_patterns;
+  split_patterns.reserve(filter.size());
+  for (const auto &f : filter) {
+    split_patterns.push_back(split_filter_pattern(f));
+  }
+
+  for (auto &g : test_manager::me().get_tests()) {
+    bool matched = false;
+    for (auto &patterns : split_patterns) {
+      if (match_name_pattern(g.first, patterns)) {
+        matched = true;
+        break;
+      }
+    }
+    if (matched) {
+      run_cases.push_back(g.first);
+      continue;
+    }
+
+    for (auto &c : g.second) {
+      std::string full_name = g.first + "." + c.first;
+      matched = false;
+      for (auto &patterns : split_patterns) {
+        if (match_name_pattern(c.first, patterns) || match_name_pattern(full_name, patterns)) {
+          matched = true;
+          break;
+        }
+      }
+      if (matched) {
+        run_cases.push_back(full_name);
+      }
+    }
+  }
+}
+
 static void append_guess_case(std::vector<std::string> &run_cases, const std::vector<std::string> &guess_cases,
                               std::string ignore_exec) {
   // AI自动填写的case过滤可能会乱填参数，这里简单适配一下几个场景
@@ -500,15 +566,21 @@ static void append_guess_case(std::vector<std::string> &run_cases, const std::ve
 int run_tests(int argc, char *argv[]) {
   std::vector<std::string> run_cases;
   std::vector<std::string> guess_cases;
+  std::vector<std::string> filter;
   const char *version = "1.0.0";
   bool is_help = false;
   bool is_show_version = false;
+  bool is_list_tests = false;
 
   atfw::util::cli::cmd_option::ptr_type cmd_opts = atfw::util::cli::cmd_option::create();
   cmd_opts->bind_cmd("-h, --help, help", atfw::util::cli::phoenix::set_const(is_help, true))
       ->set_help_msg("                              show help message and exit.");
   cmd_opts->bind_cmd("-v, --version, version", atfw::util::cli::phoenix::set_const(is_show_version, true))
       ->set_help_msg("                              show version and exit.");
+  cmd_opts->bind_cmd("-l, --list-tests, --gtest_list_tests", atfw::util::cli::phoenix::set_const(is_list_tests, true))
+      ->set_help_msg("                              show test list and exit.");
+  cmd_opts->bind_cmd("-f, --filter, --gtest_filter", atfw::util::cli::phoenix::push_back(filter))
+      ->set_help_msg("[case names...]               only run cases matches filter.");
   cmd_opts->bind_cmd("-r, --run, run", atfw::util::cli::phoenix::push_back(run_cases))
       ->set_help_msg("[case names...]               only run specify cases.");
   cmd_opts->bind_cmd("@OnDefault", atfw::util::cli::phoenix::push_back(guess_cases));
@@ -524,7 +596,17 @@ int run_tests(int argc, char *argv[]) {
     return 0;
   }
 
+  if (is_list_tests) {
+    for (auto &g : test_manager::me().get_tests()) {
+      for (auto &c : g.second) {
+        std::cout << g.first << "." << c.first << std::endl;
+      }
+    }
+    return 0;
+  }
+
   append_guess_case(run_cases, guess_cases, argv[0]);
+  append_filter_case(run_cases, filter);
 
   test_manager::me().set_cases(run_cases);
   run_event_on_start();
