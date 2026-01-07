@@ -163,7 +163,7 @@ ATFRAMEWORK_UTILS_API ATFW_UTIL_SANITIZER_NO_THREAD void log_sink_file_backend::
   time_t now = ATFRAMEWORK_UTILS_NAMESPACE_ID::time::time_utility::get_sys_now();
 
   // 日志级别高于指定级别，需要刷入
-  if (static_cast<uint32_t>(caller.level_id) <= log_file_.auto_flush) {
+  if (static_cast<uint32_t>(caller.level_id) >= log_file_.auto_flush) {
     log_file_.last_flush_timepoint_ = now;
     fflush(&f);
   }

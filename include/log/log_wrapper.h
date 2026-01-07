@@ -186,13 +186,13 @@ class log_wrapper {
 #endif
 
   // 一般日志级别检查
-  UTIL_FORCEINLINE bool check_level(level_t::type level) const { return log_level_ >= level; }
+  UTIL_FORCEINLINE bool check_level(level_t::type level) const { return level >= log_level_; }
 
   UTIL_FORCEINLINE static bool check_level(const log_wrapper *logger, level_t::type level) {
     if (nullptr == logger) {
       return false;
     }
-    return logger->log_level_ >= level;
+    return level >= logger->log_level_;
   }
 
   ATFRAMEWORK_UTILS_API size_t sink_size() const;
@@ -203,8 +203,8 @@ class log_wrapper {
    * @param level_min 最低日志级别
    * @param level_min 最高日志级别
    */
-  ATFRAMEWORK_UTILS_API void add_sink(log_handler_t h, level_t::type level_min = level_t::LOG_LW_FATAL,
-                                      level_t::type level_max = level_t::LOG_LW_DEBUG);
+  ATFRAMEWORK_UTILS_API void add_sink(log_handler_t h, level_t::type level_min = level_t::LOG_LW_DEBUG,
+                                      level_t::type level_max = level_t::LOG_LW_FATAL);
 
   /**
    * @brief 移除最后一个后端接口
@@ -218,8 +218,8 @@ class log_wrapper {
    * @param level_min 最高日志级别
    * @return 如果没找到则返回false，成功返回true
    */
-  ATFRAMEWORK_UTILS_API bool set_sink(size_t idx, level_t::type level_min = level_t::LOG_LW_FATAL,
-                                      level_t::type level_max = level_t::LOG_LW_DEBUG);
+  ATFRAMEWORK_UTILS_API bool set_sink(size_t idx, level_t::type level_min = level_t::LOG_LW_DEBUG,
+                                      level_t::type level_max = level_t::LOG_LW_FATAL);
 
   /**
    * @brief 移除所有后端, std::function无法比较，所以只能全清
@@ -250,8 +250,8 @@ class log_wrapper {
     options_.set(t, v);
   }
 
-  ATFRAMEWORK_UTILS_API void set_stacktrace_level(level_t::type level_max = level_t::LOG_LW_DISABLED,
-                                                  level_t::type level_min = level_t::LOG_LW_DISABLED);
+  ATFRAMEWORK_UTILS_API void set_stacktrace_level(level_t::type level_min = level_t::LOG_LW_DISABLED,
+                                                  level_t::type level_max = level_t::LOG_LW_DISABLED);
   UTIL_FORCEINLINE const std::pair<level_t::type, level_t::type> &get_stacktrace_level() const {
     return stacktrace_level_;
   }

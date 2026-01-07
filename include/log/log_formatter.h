@@ -40,14 +40,14 @@ class log_formatter {
 
   struct ATFRAMEWORK_UTILS_API level_t {
     enum type {
-      LOG_LW_DISABLED = 0,  // 关闭日志
-      LOG_LW_FATAL,         // 强制输出
-      LOG_LW_ERROR,         // 错误
-      LOG_LW_WARNING,
-      LOG_LW_INFO,
-      LOG_LW_NOTICE,
+      LOG_LW_TRACE = 0,
       LOG_LW_DEBUG,
-      LOG_LW_TRACE,
+      LOG_LW_NOTICE,
+      LOG_LW_INFO,
+      LOG_LW_WARNING,
+      LOG_LW_ERROR,     // 错误
+      LOG_LW_FATAL,     // 强制输出
+      LOG_LW_DISABLED,  // 关闭日志
     };
   };
 

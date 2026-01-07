@@ -17,21 +17,21 @@ ATFRAMEWORK_UTILS_NAMESPACE_BEGIN
 namespace log {
 namespace detail {
 ATFW_UTIL_SANITIZER_NO_THREAD static const char *log_formatter_get_level_name(int l) {
-  static const char *all_level_name[log_formatter::level_t::LOG_LW_TRACE + 1] = {nullptr};
+  static const char *all_level_name[log_formatter::level_t::LOG_LW_DISABLED + 1] = {nullptr};
 
-  if (l > log_formatter::level_t::LOG_LW_TRACE || l < 0) {
+  if (l > log_formatter::level_t::LOG_LW_DISABLED || l < 0) {
     return "Unknown";
   }
 
   if (nullptr == all_level_name[log_formatter::level_t::LOG_LW_TRACE]) {
-    all_level_name[log_formatter::level_t::LOG_LW_DISABLED] = "Disabled";
-    all_level_name[log_formatter::level_t::LOG_LW_FATAL] = "Fatal";
-    all_level_name[log_formatter::level_t::LOG_LW_ERROR] = "Error";
-    all_level_name[log_formatter::level_t::LOG_LW_WARNING] = "Warn";
-    all_level_name[log_formatter::level_t::LOG_LW_INFO] = "Info";
-    all_level_name[log_formatter::level_t::LOG_LW_NOTICE] = "Notice";
-    all_level_name[log_formatter::level_t::LOG_LW_DEBUG] = "Debug";
-    all_level_name[log_formatter::level_t::LOG_LW_TRACE] = "Trace";
+    all_level_name[log_formatter::level_t::LOG_LW_TRACE] = "TRACE";
+    all_level_name[log_formatter::level_t::LOG_LW_DEBUG] = "DEBUG";
+    all_level_name[log_formatter::level_t::LOG_LW_NOTICE] = "NOTICE";
+    all_level_name[log_formatter::level_t::LOG_LW_INFO] = "INFO";
+    all_level_name[log_formatter::level_t::LOG_LW_WARNING] = "WARN";
+    all_level_name[log_formatter::level_t::LOG_LW_ERROR] = "ERROR";
+    all_level_name[log_formatter::level_t::LOG_LW_FATAL] = "FATAL";
+    all_level_name[log_formatter::level_t::LOG_LW_DISABLED] = "DISABLED";
   }
   return all_level_name[l];
 }
@@ -447,7 +447,7 @@ ATFRAMEWORK_UTILS_API log_formatter::level_t::type log_formatter::get_level_by_n
   // number, directly convert it
   if (name[0] == '\\' || (name[0] >= '0' && name[0] <= '9')) {
     int l = ATFRAMEWORK_UTILS_NAMESPACE_ID::string::to_int<int>(name);
-    if (l >= 0 && l <= level_t::LOG_LW_DEBUG) {
+    if (l >= 0 && l <= level_t::LOG_LW_FATAL) {
       return static_cast<level_t::type>(l);
     }
 
@@ -469,6 +469,10 @@ ATFRAMEWORK_UTILS_API log_formatter::level_t::type log_formatter::get_level_by_n
   }
 
   if (0 == UTIL_STRFUNC_STRNCASE_CMP("warn", name.data(), name.size())) {
+    return level_t::LOG_LW_WARNING;
+  }
+
+  if (0 == UTIL_STRFUNC_STRNCASE_CMP("warning", name.data(), name.size())) {
     return level_t::LOG_LW_WARNING;
   }
 
