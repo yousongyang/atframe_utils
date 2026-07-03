@@ -23,8 +23,9 @@
 #      define CRYPTO_USE_OPENSSL_WITH_OSSL_APIS 1
 #    endif
 
-#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL) ||                       \
-        (!defined(LIBRESSL_VERSION_NUMBER) && defined(OPENSSL_VERSION_NUMBER) && \
+#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL) ||                              \
+        (defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3070000fL) || \
+        (!defined(LIBRESSL_VERSION_NUMBER) && defined(OPENSSL_VERSION_NUMBER) &&        \
          OPENSSL_VERSION_NUMBER >= 0x10101000L)
 #      define CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY 1
 #    endif
@@ -51,8 +52,11 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef CRYPTO_DH_ENABLED
@@ -530,10 +534,10 @@ static int evp_pkey_asn1_ctrl(EVP_PKEY *pkey, int op, int arg1, void *arg2) {
   int ret;
   switch (op) {
     case ASN1_PKEY_CTRL_SET1_TLS_ENCPT:
-      ret = EC_KEY_oct2key(ec_key, (const unsigned char *)arg2, (size_t)arg1, nullptr);
+      ret = EC_KEY_oct2key(ec_key, (const unsigned char *)arg2, static_cast<size_t>(arg1), nullptr);
       break;
     case ASN1_PKEY_CTRL_GET1_TLS_ENCPT:
-      ret = (int)EC_KEY_key2buf(ec_key, POINT_CONVERSION_UNCOMPRESSED, (unsigned char **)arg2, nullptr);
+      ret = static_cast<int>(EC_KEY_key2buf(ec_key, POINT_CONVERSION_UNCOMPRESSED, (unsigned char **)arg2, nullptr));
       break;
     default:
       ret = -2;
@@ -547,21 +551,51 @@ static int evp_pkey_asn1_ctrl(EVP_PKEY *pkey, int op, int arg1, void *arg2) {
 
 static size_t EVP_PKEY_get1_tls_encodedpoint(EVP_PKEY *pkey, unsigned char **ppt) {
   int rv;
-  rv = evp_pkey_asn1_ctrl(pkey, ASN1_PKEY_CTRL_GET1_TLS_ENCPT, 0, (void *)ppt);
+  rv = evp_pkey_asn1_ctrl(pkey, ASN1_PKEY_CTRL_GET1_TLS_ENCPT, 0, reinterpret_cast<void *>(ppt));
   if (rv <= 0) return 0;
-  return (size_t)rv;
+  return static_cast<size_t>(rv);
 }
 
 static int EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey, const unsigned char *pt, size_t ptlen) {
   if (ptlen > INT_MAX) return 0;
-  if (evp_pkey_asn1_ctrl(pkey, ASN1_PKEY_CTRL_SET1_TLS_ENCPT, (int)ptlen, (void *)pt) <= 0) return 0;
+  if (evp_pkey_asn1_ctrl(pkey, ASN1_PKEY_CTRL_SET1_TLS_ENCPT, static_cast<int>(ptlen),
+                         reinterpret_cast<void *>(const_cast<unsigned char *>(pt))) <= 0)
+    return 0;
   return 1;
 }
 
 #    endif
 
+#    ifdef CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY
+static size_t crypto_dh_EVP_PKEY_get1_raw_public_key(EVP_PKEY *pkey, unsigned char **ppt) {
+  if (nullptr == ppt) {
+    return 0;
+  }
+  *ppt = nullptr;
+
+  size_t key_len = 0;
+  if (EVP_PKEY_get_raw_public_key(pkey, nullptr, &key_len) <= 0 || 0 == key_len) {
+    return 0;
+  }
+
+  unsigned char *key_data = static_cast<unsigned char *>(OPENSSL_malloc(key_len));
+  if (nullptr == key_data) {
+    return 0;
+  }
+
+  size_t output_len = key_len;
+  if (EVP_PKEY_get_raw_public_key(pkey, key_data, &output_len) <= 0 || 0 == output_len || output_len > key_len) {
+    OPENSSL_free(key_data);
+    return 0;
+  }
+
+  *ppt = key_data;
+  return output_len;
+}
+#    endif
+
 static size_t crypto_dh_EVP_PKEY_get1_tls_encodedpoint(
-#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
+#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL) || defined(CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY)
     int group_id,
 #    else
     int,
@@ -574,13 +608,21 @@ static size_t crypto_dh_EVP_PKEY_get1_tls_encodedpoint(
   }
   EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
   return EC_KEY_key2buf(ec_key, POINT_CONVERSION_UNCOMPRESSED, ppt, nullptr);
-#    elif (defined(OPENSSL_API_COMPAT) && OPENSSL_API_COMPAT >= 0x30000000L) ||  \
-        (defined(OPENSSL_API_LEVEL) && OPENSSL_API_LEVEL >= 30000) ||            \
-        (!defined(LIBRESSL_VERSION_NUMBER) && defined(OPENSSL_VERSION_NUMBER) && \
-         OPENSSL_VERSION_NUMBER >= 0x30000000L)
-  return EVP_PKEY_get1_encoded_public_key(pkey, ppt);
 #    else
+#      if defined(CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY)
+  unsigned int gtype = 0;
+  if (0 != tls1_ec_group_id2nid(group_id, &gtype) && TLS_CURVE_CUSTOM == gtype) {
+    return crypto_dh_EVP_PKEY_get1_raw_public_key(pkey, ppt);
+  }
+#      endif
+#      if (defined(OPENSSL_API_COMPAT) && OPENSSL_API_COMPAT >= 0x30000000L) ||    \
+          (defined(OPENSSL_API_LEVEL) && OPENSSL_API_LEVEL >= 30000) ||            \
+          (!defined(LIBRESSL_VERSION_NUMBER) && defined(OPENSSL_VERSION_NUMBER) && \
+           OPENSSL_VERSION_NUMBER >= 0x30000000L)
+  return EVP_PKEY_get1_encoded_public_key(pkey, ppt);
+#      else
   return EVP_PKEY_get1_tls_encodedpoint(pkey, ppt);
+#      endif
 #    endif
 }
 
@@ -2631,7 +2673,6 @@ dh::error_code_t dh::check_or_setup_dh_pg_gy(BIGNUM *&DH_p, BIGNUM *&DH_g, BIGNU
       DH_gy = nullptr;
 #      endif
     } while (false);
-
   } while (false);
   return details::setup_errorno(*this, static_cast<int>(ERR_peek_error()), ret);
 }

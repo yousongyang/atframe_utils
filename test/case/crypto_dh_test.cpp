@@ -52,11 +52,13 @@ CASE_TEST(crypto_dh, get_all_curve_names) {
 
 // Expected per-curve availability for the active backend, used as adaptation
 // regression checks. Exactly one crypto backend is active inside CRYPTO_DH_ENABLED.
-//   * OpenSSL/LibreSSL/BoringSSL expose a curve iff its NID is defined.
+//   * Traditional OpenSSL/LibreSSL/BoringSSL EC curves are expected when their NID is defined.
+//   * X25519/X448 need backend-specific EVP keygen support; an object NID alone is not enough.
 //   * mbedtls exposes a curve iff the MBEDTLS_ECP_DP_*_ENABLED config is set.
-// X448 is forced to 0 on mbedtls because mbedtls_ecdh_can_do reports curve448 as
-// unsupported for ECDH. Only the universally available curves are hard-asserted;
-// the remaining curves are exercised when the backend reports them.
+// LibreSSL 3.7.0+ exposes X25519 via EVP/raw key APIs, but does not expose an X448 EVP method.
+// X448 is forced to 0 on BoringSSL/LibreSSL/mbedtls because current keygen/ECDH support is absent there.
+// Only the universally available curves are hard-asserted; provider/config dependent curves are exercised when
+// reported.
 #  if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_MBEDTLS)
 #    ifdef MBEDTLS_ECP_DP_CURVE25519_ENABLED
 #      define CRYPTO_DH_TEST_EXPECT_X25519 1
@@ -86,14 +88,30 @@ CASE_TEST(crypto_dh, get_all_curve_names) {
 #    endif
 #  elif defined(ATFRAMEWORK_UTILS_CRYPTO_USE_OPENSSL) || defined(ATFRAMEWORK_UTILS_CRYPTO_USE_LIBRESSL) || \
       defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
-#    ifdef NID_X25519
-#      define CRYPTO_DH_TEST_EXPECT_X25519 1
+#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_OPENSSL)
+#      ifdef NID_X25519
+#        define CRYPTO_DH_TEST_EXPECT_X25519 1
+#      else
+#        define CRYPTO_DH_TEST_EXPECT_X25519 0
+#      endif
+#      ifdef NID_X448
+#        define CRYPTO_DH_TEST_EXPECT_X448 1
+#      else
+#        define CRYPTO_DH_TEST_EXPECT_X448 0
+#      endif
+#    elif defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
+#      ifdef NID_X25519
+#        define CRYPTO_DH_TEST_EXPECT_X25519 1
+#      else
+#        define CRYPTO_DH_TEST_EXPECT_X25519 0
+#      endif
+#      define CRYPTO_DH_TEST_EXPECT_X448 0
 #    else
-#      define CRYPTO_DH_TEST_EXPECT_X25519 0
-#    endif
-#    ifdef NID_X448
-#      define CRYPTO_DH_TEST_EXPECT_X448 1
-#    else
+#      if defined(NID_X25519) && defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3070000fL
+#        define CRYPTO_DH_TEST_EXPECT_X25519 1
+#      else
+#        define CRYPTO_DH_TEST_EXPECT_X25519 0
+#      endif
 #      define CRYPTO_DH_TEST_EXPECT_X448 0
 #    endif
 #    ifdef NID_secp224r1
@@ -468,7 +486,10 @@ CASE_TEST(crypto_dh, ecdh_alias_and_both_server) {
 
   int test_times = 16;
   // 单元测试多次以定位openssl是否内存泄漏的问题
-  std::vector<std::string> all_curves = {"ecdh:P-256", "ecdh:p-384", "ecdh:p-521", "ecdh:X25519"};
+  std::vector<std::string> all_curves = {"ecdh:P-256", "ecdh:p-384", "ecdh:p-521"};
+  if (crypto_dh_test_has_curve("x25519")) {
+    all_curves.push_back("ecdh:X25519");
+  }
 
   clock_t min_cost_clock = 0;
   clock_t max_cost_clock = 0;
@@ -492,12 +513,7 @@ CASE_TEST(crypto_dh, ecdh_alias_and_both_server) {
       {
         atfw::util::crypto::dh::shared_context::ptr_t svr_shctx = atfw::util::crypto::dh::shared_context::create();
         CASE_EXPECT_EQ(atfw::util::crypto::dh::error_code_t::kOk, svr_shctx->init(all_curves[curve_idx].c_str()));
-        auto svr_dh1_init_result = svr_dh1.init(svr_shctx);
-        if (svr_dh1_init_result != atfw::util::crypto::dh::error_code_t::kOk &&
-            all_curves[curve_idx] == "ecdh:X25519") {
-          break;
-        }
-        CASE_EXPECT_EQ(atfw::util::crypto::dh::error_code_t::kOk, svr_dh1_init_result);
+        CASE_EXPECT_EQ(atfw::util::crypto::dh::error_code_t::kOk, svr_dh1.init(svr_shctx));
       }
 
       // client - init: read and setup client shared context
