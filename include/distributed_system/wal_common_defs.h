@@ -11,14 +11,11 @@
 #include <design_pattern/result_type.h>
 #include <memory/rc_ptr.h>
 
-#include <stdint.h>
-#include <atomic>
 #include <chrono>
-#include <deque>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 
 ATFRAMEWORK_UTILS_NAMESPACE_BEGIN
@@ -141,9 +138,11 @@ struct ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_mt_mode_func_trait<wal_mt_mode::kMult
 
   template <class Y, class Alloc, class... ArgsT>
   static inline std::shared_ptr<Y> allocate_strong(const Alloc& alloc, ArgsT&&... args) {
-#include "config/compiler/internal/stl_compact_prefix.h.inc"  // NOLINT: build/include
+    // NOLINTNEXTLINE(build/include, readability-duplicate-include, unused-includes)
+#include "config/compiler/internal/stl_compact_prefix.h.inc"  // IWYU pragma: keep
     return std::allocate_shared<Y>(alloc, std::forward<ArgsT>(args)...);
-#include "config/compiler/internal/stl_compact_suffix.h.inc"  // NOLINT: build/include
+    // NOLINTNEXTLINE(build/include, readability-duplicate-include, unused-includes)
+#include "config/compiler/internal/stl_compact_suffix.h.inc"  // IWYU pragma: keep
   }
 
   template <class Y, class F>
@@ -169,14 +168,16 @@ struct ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_hash_code_traits {
   using hash_code_type = size_t;
 
   static inline hash_code_type initial_hash_code() noexcept { return 0; }
-  static inline hash_code_type validate(const hash_code_type& hash_code) noexcept { return 0 != hash_code; }
-  static inline hash_code_type equal(const hash_code_type& l, const hash_code_type& r) noexcept { return l == r; }
+  static inline bool validate(const hash_code_type& hash_code) noexcept { return 0 != hash_code; }
+  static inline bool equal(const hash_code_type& l, const hash_code_type& r) noexcept { return l == r; }
 };
 
+// NOLINTBEGIN(whitespace/indent_namespace)
 template <class LogKeyT, class LogT, class ActionGetter, class CompareLogKeyT = std::less<LogKeyT>,
           class HashActionCaseT = std::hash<typename wal_log_action_getter_trait<LogT, ActionGetter>::type>,
           class EqualActionCaseT = std::equal_to<typename wal_log_action_getter_trait<LogT, ActionGetter>::type>,
           class Allocator = std::allocator<LogT>, wal_mt_mode MTMode = wal_mt_mode::kMultiThread>
+// NOLINTEND(whitespace/indent_namespace)
 class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_operator {
  public:
   using log_key_type = LogKeyT;
@@ -199,18 +200,22 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_operator {
 
   template <class Y, class... ArgsT>
   static inline typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr make_strong(ArgsT&&... args) {
-#include "config/compiler/internal/stl_compact_prefix.h.inc"  // NOLINT: build/include
+    // NOLINTNEXTLINE(build/include, readability-duplicate-include)
+#include "config/compiler/internal/stl_compact_prefix.h.inc"  // IWYU pragma: keep
     using alloc_type = typename std::allocator_traits<log_allocator>::template rebind_alloc<Y>;
     return wal_mt_mode_func_trait<mt_mode>::template allocate_strong<Y>(alloc_type(), std::forward<ArgsT>(args)...);
-#include "config/compiler/internal/stl_compact_suffix.h.inc"  // NOLINT: build/include
+    // NOLINTNEXTLINE(build/include, readability-duplicate-include)
+#include "config/compiler/internal/stl_compact_suffix.h.inc"  // IWYU pragma: keep
   }
 
   template <class Y, class Alloc, class... ArgsT>
   static inline typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr allocate_strong(const Alloc& alloc,
                                                                                         ArgsT&&... args) {
-#include "config/compiler/internal/stl_compact_prefix.h.inc"  // NOLINT: build/include
+    // NOLINTNEXTLINE(build/include, readability-duplicate-include)
+#include "config/compiler/internal/stl_compact_prefix.h.inc"  // IWYU pragma: keep
     return wal_mt_mode_func_trait<mt_mode>::template allocate_strong<Y>(alloc, std::forward<ArgsT>(args)...);
-#include "config/compiler/internal/stl_compact_suffix.h.inc"  // NOLINT: build/include
+    // NOLINTNEXTLINE(build/include, readability-duplicate-include)
+#include "config/compiler/internal/stl_compact_suffix.h.inc"  // IWYU pragma: keep
   }
 
   template <class Y, class F>
@@ -238,13 +243,14 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_operator {
   using enable_shared_from_this = typename wal_mt_mode_func_trait<mt_mode>::template enable_shared_from_this<Y>;
 };
 
+// NOLINTBEGIN(whitespace/indent_namespace)
 template <class LogKeyT, class LogT, class ActionGetter, wal_mt_mode MTMode, class CompareLogKeyT = std::less<LogKeyT>,
           class HashActionCaseT = std::hash<typename wal_log_action_getter_trait<LogT, ActionGetter>::type>,
           class EqualActionCaseT = std::equal_to<typename wal_log_action_getter_trait<LogT, ActionGetter>::type>,
           class Allocator = std::allocator<LogT>>
 using wal_log_operator_with_mt_mode =
     wal_log_operator<LogKeyT, LogT, ActionGetter, CompareLogKeyT, HashActionCaseT, EqualActionCaseT, Allocator, MTMode>;
+// NOLINTEND(whitespace/indent_namespace)
 
 }  // namespace distributed_system
 ATFRAMEWORK_UTILS_NAMESPACE_END
-

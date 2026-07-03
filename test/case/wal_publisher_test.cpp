@@ -2,6 +2,7 @@
 
 #include <distributed_system/wal_client.h>
 #include <distributed_system/wal_publisher.h>
+#include <distributed_system/wal_subscriber.h>
 
 #include <algorithm>
 #include <chrono>
@@ -2469,4 +2470,3 @@ CASE_TEST(wal_publisher, share_wal_object_with_wal_client) {
 }
 
 }  // namespace st
-

@@ -22,6 +22,12 @@
          OPENSSL_VERSION_NUMBER >= 0x30000000L)
 #      define CRYPTO_USE_OPENSSL_WITH_OSSL_APIS 1
 #    endif
+
+#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL) ||                       \
+        (!defined(LIBRESSL_VERSION_NUMBER) && defined(OPENSSL_VERSION_NUMBER) && \
+         OPENSSL_VERSION_NUMBER >= 0x10101000L)
+#      define CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY 1
+#    endif
 #  elif defined(ATFRAMEWORK_UTILS_CRYPTO_USE_MBEDTLS)
 #    include "mbedtls/platform.h"
 // "mbedtls/platform.h" must be the first
@@ -45,6 +51,8 @@
 
 #include <cassert>
 #include <cstring>
+#include <string>
+#include <vector>
 
 #ifdef CRYPTO_DH_ENABLED
 
@@ -551,8 +559,12 @@ static int EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey, const unsigned char *p
 
 #    endif
 
-static size_t crypto_dh_EVP_PKEY_get1_tls_encodedpoint(EVP_PKEY *pkey, unsigned char **ppt) {
+static size_t crypto_dh_EVP_PKEY_get1_tls_encodedpoint(int group_id, EVP_PKEY *pkey, unsigned char **ppt) {
 #    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
+  unsigned int gtype = 0;
+  if (0 != tls1_ec_group_id2nid(group_id, &gtype) && TLS_CURVE_CUSTOM == gtype) {
+    return EVP_PKEY_get1_tls_encodedpoint(pkey, ppt);
+  }
   EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
   return EC_KEY_key2buf(ec_key, POINT_CONVERSION_UNCOMPRESSED, ppt, nullptr);
 #    elif (defined(OPENSSL_API_COMPAT) && OPENSSL_API_COMPAT >= 0x30000000L) ||  \
@@ -585,8 +597,13 @@ static int crypto_dh_EC_KEY_oct2key(EC_KEY *key, const unsigned char *buf, size_
 }
 #    endif
 
-static size_t crypto_dh_EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey, const unsigned char *pt, size_t ptlen) {
+static size_t crypto_dh_EVP_PKEY_set1_tls_encodedpoint(int group_id, EVP_PKEY *pkey, const unsigned char *pt,
+                                                       size_t ptlen) {
 #    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
+  unsigned int gtype = 0;
+  if (0 != tls1_ec_group_id2nid(group_id, &gtype) && TLS_CURVE_CUSTOM == gtype) {
+    return static_cast<size_t>(EVP_PKEY_set1_tls_encodedpoint(pkey, pt, ptlen));
+  }
   EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(pkey);
   if (crypto_dh_EC_KEY_oct2key(ec_key, pt, ptlen, nullptr) <= 0) {
     return 0;
@@ -899,7 +916,7 @@ class openssl_raii {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(openssl_raii)
 
  public:
-  inline openssl_raii(TPTR *in) : data_(in) {}
+  inline explicit openssl_raii(TPTR *in) : data_(in) {}
   inline ~openssl_raii() { reset(); }
 
   inline void reset() { ATFRAMEWORK_UTILS_NAMESPACE_ID::crypto::details::reset(data_); }
@@ -919,11 +936,23 @@ class openssl_raii {
   TPTR *data_;
 };
 
+static bool get_ecdh_group_info(int group_id, int &curve_nid, unsigned int &gtype) {
+  curve_nid = tls1_ec_group_id2nid(group_id, &gtype);
+  return 0 != curve_nid;
+}
+
 static EVP_PKEY_CTX *initialize_pkey_ctx_by_group_id(int group_id, bool init_keygen, bool init_paramgen) {
   EVP_PKEY_CTX *ret = nullptr;
   unsigned int gtype = 0;
-  int curve_nid = tls1_ec_group_id2nid(group_id, &gtype);
+  int curve_nid = 0;
+  if (!get_ecdh_group_info(group_id, curve_nid, gtype)) {
+    return nullptr;
+  }
+
   if (TLS_CURVE_CUSTOM == gtype) {
+    // OpenSSL marks TLS groups backed by dedicated EVP key types as TLS_CURVE_CUSTOM
+    // (X25519 in 1.1.0, X25519/X448 in 1.1.1+ and 3.x providers). These groups do not have
+    // traditional EC domain parameters, so EVP_PKEY_paramgen_init() is intentionally skipped.
     ret = EVP_PKEY_CTX_new_id(curve_nid, nullptr);
   } else {
     ret = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
@@ -938,15 +967,13 @@ static EVP_PKEY_CTX *initialize_pkey_ctx_by_group_id(int group_id, bool init_key
     return ret;
   }
 
-  if (init_paramgen) {
-    if (EVP_PKEY_paramgen_init(ret) <= 0 &&
-        EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE != ERR_GET_REASON(ERR_peek_error())) {
-      reset(ret);
-      return ret;
-    }
+  if (TLS_CURVE_CUSTOM != gtype && init_paramgen && EVP_PKEY_paramgen_init(ret) <= 0) {
+    reset(ret);
+    return ret;
   }
 
-  if (TLS_CURVE_CUSTOM != gtype && init_paramgen && EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ret, curve_nid) <= 0) {
+  if (TLS_CURVE_CUSTOM != gtype && (init_keygen || init_paramgen) &&
+      EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ret, curve_nid) <= 0) {
     reset(ret);
   }
 
@@ -971,6 +998,58 @@ static EVP_PKEY_CTX *initialize_pkey_ctx_by_pkey(EVP_PKEY *params_key, bool init
   if (init_paramgen && EVP_PKEY_paramgen_init(ret) <= 0) {
     reset(ret);
     return ret;
+  }
+
+  return ret;
+}
+
+static EVP_PKEY_CTX *initialize_ecdh_keygen_ctx_by_group_id(int group_id) {
+  unsigned int gtype = 0;
+  int curve_nid = 0;
+  if (!get_ecdh_group_info(group_id, curve_nid, gtype)) {
+    return nullptr;
+  }
+
+  if (TLS_CURVE_CUSTOM == gtype) {
+    // See initialize_pkey_ctx_by_group_id(): custom TLS groups keygen directly without paramgen.
+    return initialize_pkey_ctx_by_group_id(group_id, true, false);
+  }
+
+  openssl_raii<EVP_PKEY_CTX> paramgen_ctx{initialize_pkey_ctx_by_group_id(group_id, false, true)};
+  if (nullptr == paramgen_ctx.get()) {
+    return nullptr;
+  }
+
+  openssl_raii<EVP_PKEY> params_key{nullptr};
+  if (EVP_PKEY_paramgen(paramgen_ctx.get(), &params_key.ref()) <= 0 || nullptr == params_key.get()) {
+    return nullptr;
+  }
+
+  return initialize_pkey_ctx_by_pkey(params_key.get(), true, false);
+}
+
+static EVP_PKEY *initialize_peer_pkey_by_group_id(int group_id, EVP_PKEY_CTX *keygen_ctx, const unsigned char *point,
+                                                  size_t point_len) {
+  unsigned int gtype = 0;
+  int curve_nid = 0;
+  if (nullptr == point || 0 == point_len || !get_ecdh_group_info(group_id, curve_nid, gtype)) {
+    return nullptr;
+  }
+
+#    ifdef CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY
+  if (TLS_CURVE_CUSTOM == gtype) {
+    return EVP_PKEY_new_raw_public_key(curve_nid, nullptr, point, point_len);
+  }
+#    endif
+
+  EVP_PKEY *ret = nullptr;
+  if (nullptr == keygen_ctx || EVP_PKEY_keygen(keygen_ctx, &ret) <= 0 || nullptr == ret) {
+    reset(ret);
+    return nullptr;
+  }
+
+  if (crypto_dh_EVP_PKEY_set1_tls_encodedpoint(group_id, ret, point, point_len) <= 0) {
+    reset(ret);
   }
 
   return ret;
@@ -1181,29 +1260,13 @@ ATFRAMEWORK_UTILS_API dh::error_code_t dh::shared_context::init(nostd::string_vi
       defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
       // https://github.com/prithuadhikary/OPENSSL_EVP_ECDH_EXAMPLE/blob/master/main.c
       dh_param_->group_id = tls1_nid2group_id(details::supported_dh_curves_openssl[ecp_idx]);
-      details::openssl_raii<EVP_PKEY_CTX> paramgen_ctx{
-          details::initialize_pkey_ctx_by_group_id(dh_param_->group_id, false, true)};
-      if (nullptr == paramgen_ctx.get()) {
+      details::reset(dh_param_->keygen_ctx);
+      dh_param_->keygen_ctx = details::initialize_ecdh_keygen_ctx_by_group_id(dh_param_->group_id);
+      if (nullptr == dh_param_->keygen_ctx) {
         dh_param_->group_id = 0;
         ret = error_code_t::kNotSupport;
         break;
       }
-
-      do {
-        details::openssl_raii<EVP_PKEY> params_key{nullptr};
-        EVP_PKEY_paramgen(paramgen_ctx.get(), &params_key.ref());
-        // openssl 1.1.1 will report EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE for x25519 and x448
-        if (nullptr == params_key.get() &&
-            EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE != ERR_GET_REASON(ERR_peek_error())) {
-          break;
-        }
-        details::reset(dh_param_->keygen_ctx);
-        if (nullptr == paramgen_ctx.get()) {
-          dh_param_->keygen_ctx = details::initialize_pkey_ctx_by_group_id(dh_param_->group_id, true, false);
-        } else {
-          dh_param_->keygen_ctx = details::initialize_pkey_ctx_by_pkey(params_key.get(), true, false);
-        }
-      } while (false);
 #  elif defined(ATFRAMEWORK_UTILS_CRYPTO_USE_MBEDTLS)
       const mbedtls_ecp_curve_info *curve = mbedtls_ecp_curve_info_from_name(details::supported_dh_curves[ecp_idx][0]);
       if (nullptr == curve) {
@@ -1358,25 +1421,11 @@ ATFRAMEWORK_UTILS_API dh::error_code_t dh::shared_context::try_reset_ecp_id(int 
   }
 
   dh_param_->group_id = group_id;
-  details::openssl_raii<EVP_PKEY_CTX> paramgen_ctx{
-      details::initialize_pkey_ctx_by_group_id(dh_param_->group_id, false, true)};
-  if (nullptr == paramgen_ctx.get()) {
+  details::reset(dh_param_->keygen_ctx);
+  dh_param_->keygen_ctx = details::initialize_ecdh_keygen_ctx_by_group_id(dh_param_->group_id);
+  if (nullptr == dh_param_->keygen_ctx) {
     dh_param_->group_id = 0;
     return error_code_t::kNotSupport;
-  }
-
-  details::openssl_raii<EVP_PKEY> params_key{nullptr};
-  EVP_PKEY_paramgen(paramgen_ctx.get(), &params_key.ref());
-  // openssl 1.1.1 will report EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE for x25519 and x448
-  if (nullptr == params_key.get() &&
-      EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE != ERR_GET_REASON(ERR_peek_error())) {
-    return error_code_t::kMalloc;
-  }
-  details::reset(dh_param_->keygen_ctx);
-  if (nullptr == params_key.get()) {
-    dh_param_->keygen_ctx = details::initialize_pkey_ctx_by_group_id(dh_param_->group_id, true, false);
-  } else {
-    dh_param_->keygen_ctx = details::initialize_pkey_ctx_by_pkey(params_key.get(), true, false);
   }
 
   return error_code_t::kOk;
@@ -1770,13 +1819,14 @@ ATFRAMEWORK_UTILS_API dh::error_code_t dh::make_params(std::vector<unsigned char
       //   pkey_set_type()
       //   EVP_PKEY_print_params()
       //   EVP_PKEY_print_params()
+      int group_id = shared_context_->get_dh_parameter().group_id;
       unsigned char *point_data = nullptr;
-      size_t encode_len = crypto_dh_EVP_PKEY_get1_tls_encodedpoint(dh_context_->openssl_ecdh_pkey_, &point_data);
+      size_t encode_len =
+          crypto_dh_EVP_PKEY_get1_tls_encodedpoint(group_id, dh_context_->openssl_ecdh_pkey_, &point_data);
       if (nullptr == point_data) {
         ret = details::setup_errorno(*this, static_cast<int>(ERR_peek_error()), error_code_t::kInitDhGenerateKey);
         break;
       }
-      int group_id = shared_context_->get_dh_parameter().group_id;
       // {
       //     int type_id = EVP_PKEY_id(dh_context_->openssl_ecdh_pkey_);
       //     if (EVP_PKEY_EC == type_id) {
@@ -1903,26 +1953,11 @@ ATFRAMEWORK_UTILS_API dh::error_code_t dh::read_params(const unsigned char *inpu
         break;
       }
 
+      details::reset(dh_context_->openssl_ecdh_peer_key_);
+      dh_context_->openssl_ecdh_peer_key_ = details::initialize_peer_pkey_by_group_id(
+          group_id, shared_context_->get_dh_parameter().keygen_ctx, &input[curve_grp_len], encoded_pt_len);
       if (nullptr == dh_context_->openssl_ecdh_peer_key_) {
-        EVP_PKEY_keygen(shared_context_->get_dh_parameter().keygen_ctx, &dh_context_->openssl_ecdh_peer_key_);
-      }
-      if (nullptr == dh_context_->openssl_ecdh_peer_key_) {
-        ret = details::setup_errorno(*this, 0, error_code_t::kMalloc);
-        break;
-      }
-
-      // int type_id = EVP_PKEY_id(dh_context_->openssl_ecdh_pkey_);
-      //     Still missing nid information if type_id == EVP_PKEY_EC
-      // if (EVP_PKEY_set_type(dh_context_->openssl_ecdh_peer_key_, type_id) <= 0) {
-      //     ret = details::setup_errorno(*this, static_cast<int>(ERR_peek_error()), error_code_t::kNotSupport);
-      //     details::reset(dh_context_->openssl_ecdh_peer_key_);
-      //     break;
-      // }
-
-      if (crypto_dh_EVP_PKEY_set1_tls_encodedpoint(dh_context_->openssl_ecdh_peer_key_, &input[curve_grp_len],
-                                                   encoded_pt_len) <= 0) {
         ret = details::setup_errorno(*this, static_cast<int>(ERR_peek_error()), error_code_t::kNotSupport);
-        details::reset(dh_context_->openssl_ecdh_peer_key_);
         break;
       }
 
@@ -2015,8 +2050,10 @@ ATFRAMEWORK_UTILS_API dh::error_code_t dh::make_public(std::vector<unsigned char
         break;
       }
 
+      int group_id = shared_context_->get_dh_parameter().group_id;
       unsigned char *point_data = nullptr;
-      size_t encode_len = crypto_dh_EVP_PKEY_get1_tls_encodedpoint(dh_context_->openssl_ecdh_pkey_, &point_data);
+      size_t encode_len =
+          crypto_dh_EVP_PKEY_get1_tls_encodedpoint(group_id, dh_context_->openssl_ecdh_pkey_, &point_data);
       if (nullptr == point_data) {
         ret = details::setup_errorno(*this, static_cast<int>(ERR_peek_error()), error_code_t::kInitDhGenerateKey);
         break;
@@ -2180,17 +2217,12 @@ ATFRAMEWORK_UTILS_API dh::error_code_t dh::read_public(const unsigned char *inpu
         break;
       }
 
+      details::reset(dh_context_->openssl_ecdh_peer_key_);
+      dh_context_->openssl_ecdh_peer_key_ = details::initialize_peer_pkey_by_group_id(
+          shared_context_->get_dh_parameter().group_id, shared_context_->get_dh_parameter().keygen_ctx, &input[1],
+          point_len);
       if (nullptr == dh_context_->openssl_ecdh_peer_key_) {
-        EVP_PKEY_keygen(shared_context_->get_dh_parameter().keygen_ctx, &dh_context_->openssl_ecdh_peer_key_);
-      }
-      if (nullptr == dh_context_->openssl_ecdh_peer_key_) {
-        ret = details::setup_errorno(*this, 0, error_code_t::kMalloc);
-        break;
-      }
-
-      if (crypto_dh_EVP_PKEY_set1_tls_encodedpoint(dh_context_->openssl_ecdh_peer_key_, &input[1], point_len) <= 0) {
         ret = details::setup_errorno(*this, static_cast<int>(ERR_peek_error()), error_code_t::kNotSupport);
-        details::reset(dh_context_->openssl_ecdh_peer_key_);
         break;
       }
 
@@ -2399,51 +2431,30 @@ ATFRAMEWORK_UTILS_API const std::vector<std::string> &dh::get_all_curve_names() 
           continue;
         }
         int nid = tls1_ec_group_id2nid(group_id, &gtype);
-
-        if (gtype == TLS_CURVE_CUSTOM) {
-          details::openssl_raii<EVP_PKEY_CTX> pctx_keygen(EVP_PKEY_CTX_new_id(nid, nullptr));
-          if (!pctx_keygen) {
-            continue;
-          }
-
-          if (EVP_PKEY_keygen_init(pctx_keygen.get()) <= 0) {
-            continue;
-          }
-
-          details::openssl_raii<EVP_PKEY_CTX> pctx_paramgen(EVP_PKEY_CTX_new_id(nid, nullptr));
-          if (!pctx_paramgen) {
-            continue;
-          }
-
-          if (EVP_PKEY_paramgen_init(pctx_paramgen.get()) <= 0) {
-            continue;
-          }
-        } else {
-          details::openssl_raii<EVP_PKEY_CTX> pctx_keygen(EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr));
-          if (!pctx_keygen) {
-            continue;
-          }
-          if (EVP_PKEY_keygen_init(pctx_keygen.get()) <= 0) {
-            continue;
-          }
-
-          if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx_keygen.get(), nid) <= 0) {
-            continue;
-          }
-
-          details::openssl_raii<EVP_PKEY_CTX> pctx_paramgen(EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr));
-          if (!pctx_paramgen) {
-            continue;
-          }
-
-          if (EVP_PKEY_paramgen_init(pctx_paramgen.get()) <= 0) {
-            continue;
-          }
-
-          if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx_paramgen.get(), nid) <= 0) {
-            continue;
-          }
+        if (0 == nid) {
+          continue;
         }
+
+        details::openssl_raii<EVP_PKEY_CTX> pctx_keygen{details::initialize_ecdh_keygen_ctx_by_group_id(group_id)};
+        if (!pctx_keygen) {
+          continue;
+        }
+
+        details::openssl_raii<EVP_PKEY> test_key{nullptr};
+        if (EVP_PKEY_keygen(pctx_keygen.get(), &test_key.ref()) <= 0 || nullptr == test_key.get()) {
+          continue;
+        }
+
+        unsigned char *point_data = nullptr;
+        size_t encode_len = crypto_dh_EVP_PKEY_get1_tls_encodedpoint(group_id, test_key.get(), &point_data);
+        // dh::make_params use param_data[3] = encode_len, which must be no more than UINT8_MAX
+        if (nullptr == point_data || 0 == encode_len || encode_len > UINT8_MAX) {
+          if (nullptr != point_data) {
+            OPENSSL_free(point_data);
+          }
+          continue;
+        }
+        OPENSSL_free(point_data);
 
         for (const auto &curve_name : details::supported_dh_curves[i]) {
           if (nullptr != curve_name && 0 != curve_name[0]) {
@@ -2453,7 +2464,8 @@ ATFRAMEWORK_UTILS_API const std::vector<std::string> &dh::get_all_curve_names() 
         }
       }
 #  else
-      if (nullptr != mbedtls_ecp_curve_info_from_name(details::supported_dh_curves[i][0])) {
+      const mbedtls_ecp_curve_info *curve_info = mbedtls_ecp_curve_info_from_name(details::supported_dh_curves[i][0]);
+      if (nullptr != curve_info && 0 != mbedtls_ecdh_can_do(curve_info->grp_id)) {
         for (const auto &curve_name : details::supported_dh_curves[i]) {
           if (nullptr != curve_name && 0 != curve_name[0]) {
             ret.push_back(std::string("ecdh:") + curve_name);

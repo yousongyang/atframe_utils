@@ -5,21 +5,16 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <atomic>
 #include <chrono>
-#include <deque>
+#include <cstddef>
 #include <functional>
 #include <limits>
 #include <memory>
-#include <unordered_map>
 #include <utility>
-
-#include "gsl/select-gsl.h"
 
 #include "distributed_system/wal_common_defs.h"
 #include "distributed_system/wal_object.h"
-#include "distributed_system/wal_subscriber.h"
+#include "distributed_system/wal_subscriber.h"  // IWYU pragma: keep
 
 ATFRAMEWORK_UTILS_NAMESPACE_BEGIN
 namespace distributed_system {
@@ -651,7 +646,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_publisher {
         round = max_event / 16;
       }
 
-      size_t res;
+      size_t res = 0;
 
       // broadcast logs
       res = broadcast(param);
@@ -752,7 +747,9 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_publisher {
       auto iters = subscriber_manager_->find_iterator(key);
       auto notify_result = send_snapshot(iters.first, iters.second, param);
       return send_subscribe_response(subscriber, notify_result, std::move(param));
-    } else if (log_iter != wal_object_->log_cend()) {
+    }
+
+    if (log_iter != wal_object_->log_cend()) {
       auto iters = subscriber_manager_->find_iterator(key);
       auto notify_result = send_logs(log_iter, wal_object_->log_cend(), iters.first, iters.second, param);
       return send_subscribe_response(subscriber, notify_result, std::move(param));
@@ -937,4 +934,3 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_publisher {
 
 }  // namespace distributed_system
 ATFRAMEWORK_UTILS_NAMESPACE_END
-

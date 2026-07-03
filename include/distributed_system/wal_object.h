@@ -9,20 +9,16 @@
 #include <design_pattern/noncopyable.h>
 #include <nostd/type_traits.h>
 
-#include <stdint.h>
-#include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <deque>
 #include <functional>
-#include <iterator>
 #include <limits>
 #include <list>
 #include <memory>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
-
-#include "gsl/select-gsl.h"
 
 #include "distributed_system/wal_common_defs.h"
 
@@ -401,7 +397,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     finally_helper guard(*this, [](wal_object& self) { self.in_log_action_callback_ = false; });
 
     // Directly push back log
-    wal_result_code ret;
+    wal_result_code ret{};
     if (!vtable_ || !vtable_->get_log_key) {
       ret = pusk_back_internal(std::move(log), param);
     } else {
@@ -715,13 +711,13 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
 
     if (logs_.empty()) {
       return logs_.end();
-    } else {
-      // Optimization for nothing
-      // The most frequently usage of this function is used to renew subscriber, which already has the latest log
-      log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
-      if (log_key_compare_(last_key, key)) {
-        return logs_.end();
-      }
+    }
+
+    // Optimization for nothing
+    // The most frequently usage of this function is used to renew subscriber, which already has the latest log
+    log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
+    if (log_key_compare_(last_key, key)) {
+      return logs_.end();
     }
 
     return std::lower_bound(logs_.begin(), logs_.end(), key, [this](const log_pointer& l, const log_key_type& r) {
@@ -742,13 +738,13 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
 
     if (logs_.empty()) {
       return logs_.end();
-    } else {
-      // Optimization for nothing
-      // The most frequently usage of this function is used to renew subscriber, which already has the latest log
-      log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
-      if (log_key_compare_(last_key, key)) {
-        return logs_.end();
-      }
+    }
+
+    // Optimization for nothing
+    // The most frequently usage of this function is used to renew subscriber, which already has the latest log
+    log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
+    if (log_key_compare_(last_key, key)) {
+      return logs_.end();
     }
 
     return std::lower_bound(logs_.begin(), logs_.end(), key, [this](const log_pointer& l, const log_key_type& r) {
@@ -769,13 +765,13 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
 
     if (logs_.empty()) {
       return logs_.end();
-    } else {
-      // Optimization for nothing
-      // The most frequently usage of this function is used to renew subscriber, which already has the latest log
-      log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
-      if (!log_key_compare_(key, last_key)) {
-        return logs_.end();
-      }
+    }
+
+    // Optimization for nothing
+    // The most frequently usage of this function is used to renew subscriber, which already has the latest log
+    log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
+    if (!log_key_compare_(key, last_key)) {
+      return logs_.end();
     }
 
     return std::upper_bound(logs_.begin(), logs_.end(), key, [this](const log_key_type& l, const log_pointer& r) {
@@ -796,13 +792,13 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
 
     if (logs_.empty()) {
       return logs_.end();
-    } else {
-      // Optimization for nothing
-      // The most frequently usage of this function is used to renew subscriber, which already has the latest log
-      log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
-      if (!log_key_compare_(key, last_key)) {
-        return logs_.end();
-      }
+    }
+
+    // Optimization for nothing
+    // The most frequently usage of this function is used to renew subscriber, which already has the latest log
+    log_key_type last_key = vtable_->get_log_key(*this, **logs_.rbegin());
+    if (!log_key_compare_(key, last_key)) {
+      return logs_.end();
     }
 
     return std::upper_bound(logs_.begin(), logs_.end(), key, [this](const log_key_type& l, const log_pointer& r) {
@@ -873,7 +869,9 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     meta_result_type meta = vtable_->get_meta(*this, *log);
     if (meta.is_error()) {
       return *meta.get_error();
-    } else if (!meta.is_success()) {
+    }
+
+    if (!meta.is_success()) {
       return wal_result_code::kCallbackError;
     }
 
@@ -1104,4 +1102,3 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
 
 }  // namespace distributed_system
 ATFRAMEWORK_UTILS_NAMESPACE_END
-

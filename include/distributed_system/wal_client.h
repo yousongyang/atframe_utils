@@ -5,14 +5,11 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <atomic>
 #include <chrono>
-#include <deque>
+#include <cstddef>
 #include <functional>
 #include <limits>
 #include <memory>
-#include <unordered_map>
 #include <utility>
 
 #include "distributed_system/wal_common_defs.h"
@@ -654,4 +651,3 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
 
 }  // namespace distributed_system
 ATFRAMEWORK_UTILS_NAMESPACE_END
-

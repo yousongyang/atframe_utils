@@ -5,24 +5,25 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <atomic>
-#include <chrono>
-#include <deque>
 #include <functional>
 #include <list>
 #include <memory>
 #include <unordered_map>
 #include <utility>
 
+#include "design_pattern/nomovable.h"
+#include "design_pattern/noncopyable.h"
+
 #include "distributed_system/wal_common_defs.h"
 
 ATFRAMEWORK_UTILS_NAMESPACE_BEGIN
 namespace distributed_system {
 
+// NOLINTBEGIN(whitespace/indent_namespace)
 template <class PrivateDataT, class KeyT, class HashSubscriberKeyT = std::hash<KeyT>,
           class EqualSubscriberKeyT = std::equal_to<KeyT>, class Allocator = std::allocator<KeyT>,
           wal_mt_mode MTMode = wal_mt_mode::kMultiThread>
+// NOLINTEND(whitespace/indent_namespace)
 class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_subscriber {
  public:
   using pointer = typename wal_mt_mode_data_trait<wal_subscriber, MTMode>::strong_ptr;
@@ -47,8 +48,8 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_subscriber {
   };
 
  private:
-  UTIL_DESIGN_PATTERN_NOMOVABLE(wal_subscriber);
-  UTIL_DESIGN_PATTERN_NOCOPYABLE(wal_subscriber);
+  ATFW_UTIL_DESIGN_PATTERN_NOMOVABLE(wal_subscriber);
+  ATFW_UTIL_DESIGN_PATTERN_NOCOPYABLE(wal_subscriber);
   struct construct_helper {};
 
   friend class manager;
@@ -56,8 +57,8 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_subscriber {
  public:
   class manager {
    private:
-    UTIL_DESIGN_PATTERN_NOMOVABLE(manager);
-    UTIL_DESIGN_PATTERN_NOCOPYABLE(manager);
+    ATFW_UTIL_DESIGN_PATTERN_NOMOVABLE(manager);
+    ATFW_UTIL_DESIGN_PATTERN_NOCOPYABLE(manager);
 
     void remove_subscriber_timer(typename std::list<timer_type>::iterator& out) {
       if (out == subscribers_timer_.end()) {
@@ -359,11 +360,12 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_subscriber {
   typename std::list<timer_type>::iterator timer_handle_;
 };
 
+// NOLINTBEGIN(whitespace/indent_namespace)
 template <class PrivateDataT, class KeyT, wal_mt_mode MTMode, class HashSubscriberKeyT = std::hash<KeyT>,
           class EqualSubscriberKeyT = std::equal_to<KeyT>, class Allocator = std::allocator<KeyT>>
 using wal_subscriber_with_mt_mode =
     wal_subscriber<PrivateDataT, KeyT, HashSubscriberKeyT, EqualSubscriberKeyT, Allocator, MTMode>;
+// NOLINTEND(whitespace/indent_namespace)
 
 }  // namespace distributed_system
 ATFRAMEWORK_UTILS_NAMESPACE_END
-
