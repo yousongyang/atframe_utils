@@ -566,7 +566,7 @@ static int EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey, const unsigned char *p
 
 #    endif
 
-#    ifdef CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY
+#    if defined(CRYPTO_DH_HAS_EVP_PKEY_RAW_PUBLIC_KEY) && !defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
 static size_t crypto_dh_EVP_PKEY_get1_raw_public_key(EVP_PKEY *pkey, unsigned char **ppt) {
   if (nullptr == ppt) {
     return 0;
