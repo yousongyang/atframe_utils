@@ -126,7 +126,7 @@ elif [[ "$1" == "ssl.libressl" ]]; then
   cmake --build . -j --config $CONFIGURATION || cmake --build . --config $CONFIGURATION
   ctest . -VV -C $CONFIGURATION -L atframe_utils
 elif [[ "$1" == "ssl.boringssl" ]]; then
-  CRYPTO_OPTIONS="-DATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CRYPTO_USE_BORINGSSL=ON -DLIBATFRAME_UTILS_ENABLE_LIBUUID=OFF"
+  CRYPTO_OPTIONS="-DATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CRYPTO_USE_BORINGSSL=ON -DATFRAMEWORK_UTILS_ENABLE_LIBUUID=OFF"
   echo 'int main() { return 0; }' | gcc -x c -Wl,-lgcov --coverage -o /dev/null - && CRYPTO_OPTIONS="$CRYPTO_OPTIONS -DCMAKE_C_FLAGS=--coverage -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=-lgcov"
   chmod +x cmake_dev.sh
   ./cmake_dev.sh -lus -b RelWithDebInfo -r build_jobs_ci -c $USE_CC -- $CRYPTO_OPTIONS \
@@ -135,7 +135,7 @@ elif [[ "$1" == "ssl.boringssl" ]]; then
   cmake --build . -j --config $CONFIGURATION || cmake --build . --config $CONFIGURATION
   ctest . -VV -C $CONFIGURATION -L atframe_utils
 elif [[ "$1" == "ssl.mbedtls" ]]; then
-  CRYPTO_OPTIONS="-DATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CRYPTO_USE_MBEDTLS=ON=ON -DLIBATFRAME_UTILS_ENABLE_LIBUUID=OFF"
+  CRYPTO_OPTIONS="-DATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CRYPTO_USE_MBEDTLS=ON -DATFRAMEWORK_UTILS_ENABLE_LIBUUID=OFF"
   if [[ "x${USE_CC:0:5}" == "xclang" ]]; then
     bash cmake_dev.sh -lus -b $CONFIGURATION -r build_jobs_ci -c $USE_CC -- $CRYPTO_OPTIONS "-DATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LOW_MEMORY_MODE=ON"
   else

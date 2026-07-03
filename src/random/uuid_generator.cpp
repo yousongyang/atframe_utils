@@ -589,11 +589,14 @@ ATFRAMEWORK_UTILS_API std::string uuid_generator::uuid_to_string(const uuid &id,
 ATFRAMEWORK_UTILS_API std::string uuid_generator::uuid_to_binary(const uuid &id) {
   std::string ret;
   ret.resize(sizeof(uuid));
-  bit::write_be_uint32(reinterpret_cast<unsigned char *>(ret.data()), id.time_low);
-  bit::write_be_uint16(reinterpret_cast<unsigned char *>(ret.data() + 4), id.time_mid);
-  bit::write_be_uint16(reinterpret_cast<unsigned char *>(ret.data() + 6), id.time_hi_and_version);
-  bit::write_be_uint16(reinterpret_cast<unsigned char *>(ret.data() + 8), id.clock_seq);
-  memcpy(ret.data() + 10, id.node, sizeof(id.node));
+  // &ret[0] (not ret.data()) is required for C++14, where std::string::data()
+  // returns const char* and would cast away qualifiers in the reinterpret_cast.
+  // NOLINTNEXTLINE(readability-container-data-pointer)
+  bit::write_be_uint32(reinterpret_cast<unsigned char *>(&ret[0]), id.time_low);
+  bit::write_be_uint16(reinterpret_cast<unsigned char *>(&ret[4]), id.time_mid);
+  bit::write_be_uint16(reinterpret_cast<unsigned char *>(&ret[6]), id.time_hi_and_version);
+  bit::write_be_uint16(reinterpret_cast<unsigned char *>(&ret[8]), id.clock_seq);
+  memcpy(&ret[10], id.node, sizeof(id.node));
 
   return ret;
 }
