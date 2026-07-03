@@ -50,6 +50,7 @@
 #include <design_pattern/noncopyable.h>
 
 #include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -559,7 +560,13 @@ static int EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey, const unsigned char *p
 
 #    endif
 
-static size_t crypto_dh_EVP_PKEY_get1_tls_encodedpoint(int group_id, EVP_PKEY *pkey, unsigned char **ppt) {
+static size_t crypto_dh_EVP_PKEY_get1_tls_encodedpoint(
+#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
+    int group_id,
+#    else
+    int,
+#    endif
+    EVP_PKEY *pkey, unsigned char **ppt) {
 #    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
   unsigned int gtype = 0;
   if (0 != tls1_ec_group_id2nid(group_id, &gtype) && TLS_CURVE_CUSTOM == gtype) {
@@ -597,8 +604,13 @@ static int crypto_dh_EC_KEY_oct2key(EC_KEY *key, const unsigned char *buf, size_
 }
 #    endif
 
-static size_t crypto_dh_EVP_PKEY_set1_tls_encodedpoint(int group_id, EVP_PKEY *pkey, const unsigned char *pt,
-                                                       size_t ptlen) {
+static size_t crypto_dh_EVP_PKEY_set1_tls_encodedpoint(
+#    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
+    int group_id,
+#    else
+    int,
+#    endif
+    EVP_PKEY *pkey, const unsigned char *pt, size_t ptlen) {
 #    if defined(ATFRAMEWORK_UTILS_CRYPTO_USE_BORINGSSL)
   unsigned int gtype = 0;
   if (0 != tls1_ec_group_id2nid(group_id, &gtype) && TLS_CURVE_CUSTOM == gtype) {
