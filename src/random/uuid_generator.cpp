@@ -61,8 +61,6 @@
 #    endif
 
 #    ifdef HAVE_NETINET_IN_H
-#      include <fcntl.h>
-
 #      ifdef O_CLOEXEC
 #        define UL_CLOEXECSTR "e"
 #      else
@@ -89,9 +87,8 @@
 
 #  endif
 
-#  if defined(UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT) && UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT
-#    include <type_traits>
-#  endif
+#  include <string>
+#  include <type_traits>  // IWYU pragma: keep
 
 #  if defined(ATFRAMEWORK_UTILS_ENABLE_LIBUUID) && ATFRAMEWORK_UTILS_ENABLE_LIBUUID
 #    if defined(UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT) && UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT
@@ -165,10 +162,10 @@ static void gettimeofday(struct timeval *tv, void *) {
   uint64_t n;
 
   GetSystemTimeAsFileTime(&ftime);
-  n = (((uint64_t)ftime.dwHighDateTime << 32) + (uint64_t)ftime.dwLowDateTime);
+  n = ((static_cast<uint64_t>(ftime.dwHighDateTime) << 32) + static_cast<uint64_t>(ftime.dwLowDateTime));
   if (n) {
     n /= 10;
-    n -= ((369 * 365 + 89) * (uint64_t)86400) * 1000000;
+    n -= ((369 * 365 + 89) * static_cast<uint64_t>(86400)) * 1000000;
   }
 
   tv->tv_sec = n / 1000000;
@@ -267,13 +264,13 @@ static int get_node_id(unsigned char *node_id) {
   memset(buf, 0, sizeof(buf));
   ifc.ifc_len = sizeof(buf);
   ifc.ifc_buf = buf;
-  if (ioctl(sd, SIOCGIFCONF, (char *)&ifc) < 0) {
+  if (ioctl(sd, SIOCGIFCONF, reinterpret_cast<char *>(&ifc)) < 0) {
     close(sd);
     return -1;
   }
   n = ifc.ifc_len;
   for (i = 0; i < n; i += static_cast<int>(ifreq_size(*ifrp))) {
-    ifrp = (struct ifreq *)((char *)ifc.ifc_buf + i);
+    ifrp = reinterpret_cast<struct ifreq *>(reinterpret_cast<char *>(ifc.ifc_buf) + i);
     strncpy(ifr.ifr_name, ifrp->ifr_name, IFNAMSIZ);
 #    ifdef SIOCGIFHWADDR
     if (ioctl(sd, SIOCGIFHWADDR, &ifr) < 0) continue;
@@ -363,8 +360,9 @@ static int get_clock(uint32_t *clock_high, uint32_t *clock_low, uint16_t *ret_cl
         uuid_generator_state_file.close_fd();
         ret = -1;
       }
-    } else
+    } else {
       ret = -1;
+    }
   }
   if (uuid_generator_state_file.state_fd >= 0) {
     fseek(uuid_generator_state_file.state_f, 0, SEEK_SET);
@@ -378,7 +376,7 @@ static int get_clock(uint32_t *clock_high, uint32_t *clock_low, uint16_t *ret_cl
   }
   if (uuid_generator_state_file.state_fd >= 0) {
     unsigned int cl;
-    unsigned long tv1, tv2;
+    unsigned long tv1, tv2;  // NOLINT(runtime/int)
     int a;
 
     if (fscanf(uuid_generator_state_file.state_f, "clock: %04x tv: %lu %lu adj: %d\n", &cl, &tv1, &tv2, &a) == 4) {
@@ -403,7 +401,10 @@ try_again:
     adjustment = 0;
     last = tv;
   } else if ((tv.tv_sec == last.tv_sec) && (tv.tv_usec == last.tv_usec)) {
-    if (adjustment >= MAX_ADJUSTMENT) goto try_again;
+    // Keep adjustment < MAX_ADJUSTMENT (i.e. 0..9). With the *10 timestamp multiplier,
+    // usec*10+10 == (usec+1)*10, so allowing adjustment to reach MAX_ADJUSTMENT would
+    // produce the same clock value as the next microsecond's adjustment=0 and collide.
+    if (adjustment + 1 >= MAX_ADJUSTMENT) goto try_again;
     adjustment++;
   } else {
     adjustment = 0;
@@ -411,12 +412,13 @@ try_again:
   }
 
   clock_reg = static_cast<uint64_t>(tv.tv_usec) * 10 + static_cast<uint64_t>(adjustment);
-  clock_reg += ((uint64_t)tv.tv_sec) * 10000000;
-  clock_reg += (((uint64_t)0x01B21DD2) << 32) + 0x13814000;
+  clock_reg += static_cast<uint64_t>(tv.tv_sec) * 10000000;
+  clock_reg += (static_cast<uint64_t>(0x01B21DD2) << 32) + 0x13814000;
 
   if (uuid_generator_state_file.state_fd >= 0) {
     fseek(uuid_generator_state_file.state_f, 0, SEEK_SET);
     len = fprintf(uuid_generator_state_file.state_f, "clock: %04x tv: %016llu %08llu adj: %08d\n", clock_seq,
+                  // NOLINTNEXTLINE(runtime/int)
                   static_cast<unsigned long long>(last.tv_sec), static_cast<unsigned long long>(last.tv_usec),
                   adjustment);
     fflush(uuid_generator_state_file.state_f);
@@ -454,7 +456,7 @@ static int __uuid_generate_time(ATFRAMEWORK_UTILS_NAMESPACE_ID::random::uuid &ou
   }
   ret = get_clock(&clock_mid, &out.time_low, &out.clock_seq);
   out.clock_seq |= 0x8000;
-  out.time_mid = (uint16_t)clock_mid;
+  out.time_mid = static_cast<uint16_t>(clock_mid);
   out.time_hi_and_version = static_cast<uint16_t>(((clock_mid >> 16) & 0x0FFF) | 0x1000);
   memcpy(out.node, node_id, 6);
   return ret;
@@ -494,6 +496,7 @@ static void __uuid_generate_random(ATFRAMEWORK_UTILS_NAMESPACE_ID::random::uuid 
 
 #  if !(defined(ATFRAMEWORK_UTILS_ENABLE_LIBUUID) && ATFRAMEWORK_UTILS_ENABLE_LIBUUID)
 namespace details {
+namespace {
 inline static void __to_hex(char *output, unsigned char input) {
   unsigned char low = input & 0x0f;
   unsigned char high = (input >> 4) & 0x0f;
@@ -509,6 +512,7 @@ inline static void __to_hex(char *output, unsigned char input) {
     output[1] = static_cast<char>(low + '0');
   }
 }
+}  // namespace
 }  // namespace details
 #  endif
 
@@ -585,32 +589,32 @@ ATFRAMEWORK_UTILS_API std::string uuid_generator::uuid_to_string(const uuid &id,
 ATFRAMEWORK_UTILS_API std::string uuid_generator::uuid_to_binary(const uuid &id) {
   std::string ret;
   ret.resize(sizeof(uuid));
-  bit::write_be_uint32(reinterpret_cast<unsigned char *>(&ret[0]), id.time_low);
-  bit::write_be_uint16(reinterpret_cast<unsigned char *>(&ret[4]), id.time_mid);
-  bit::write_be_uint16(reinterpret_cast<unsigned char *>(&ret[6]), id.time_hi_and_version);
-  bit::write_be_uint16(reinterpret_cast<unsigned char *>(&ret[8]), id.clock_seq);
-  memcpy(&ret[10], id.node, sizeof(id.node));
+  bit::write_be_uint32(reinterpret_cast<unsigned char *>(ret.data()), id.time_low);
+  bit::write_be_uint16(reinterpret_cast<unsigned char *>(ret.data() + 4), id.time_mid);
+  bit::write_be_uint16(reinterpret_cast<unsigned char *>(ret.data() + 6), id.time_hi_and_version);
+  bit::write_be_uint16(reinterpret_cast<unsigned char *>(ret.data() + 8), id.clock_seq);
+  memcpy(ret.data() + 10, id.node, sizeof(id.node));
 
   return ret;
 }
 
 ATFRAMEWORK_UTILS_API uuid uuid_generator::binary_to_uuid(const std::string &id_bin) {
-  uuid ret;
+  uuid ret;  // NOLINT(cppcoreguidelines-pro-type-member-init)
   if (sizeof(uuid) > id_bin.size()) {
     memset(&ret, 0, sizeof(ret));
     return ret;
   }
 
-  ret.time_low = bit::read_be_uint32(reinterpret_cast<const unsigned char *>(&id_bin[0]));
-  ret.time_mid = bit::read_be_uint16(reinterpret_cast<const unsigned char *>(&id_bin[4]));
-  ret.time_hi_and_version = bit::read_be_uint16(reinterpret_cast<const unsigned char *>(&id_bin[6]));
-  ret.clock_seq = bit::read_be_uint16(reinterpret_cast<const unsigned char *>(&id_bin[8]));
-  memcpy(ret.node, &id_bin[10], sizeof(ret.node));
+  ret.time_low = bit::read_be_uint32(reinterpret_cast<const unsigned char *>(id_bin.data()));
+  ret.time_mid = bit::read_be_uint16(reinterpret_cast<const unsigned char *>(id_bin.data() + 4));
+  ret.time_hi_and_version = bit::read_be_uint16(reinterpret_cast<const unsigned char *>(id_bin.data() + 6));
+  ret.clock_seq = bit::read_be_uint16(reinterpret_cast<const unsigned char *>(id_bin.data() + 8));
+  memcpy(ret.node, id_bin.data() + 10, sizeof(ret.node));
   return ret;
 }
 
 ATFRAMEWORK_UTILS_API uuid uuid_generator::generate() {
-  uuid ret;
+  uuid ret;  // NOLINT(cppcoreguidelines-pro-type-member-init)
 
 #  if defined(ATFRAMEWORK_UTILS_ENABLE_LIBUUID) && ATFRAMEWORK_UTILS_ENABLE_LIBUUID
   uuid_t linux_uid;
@@ -641,7 +645,7 @@ ATFRAMEWORK_UTILS_API std::string uuid_generator::generate_string(bool remove_mi
 }
 
 ATFRAMEWORK_UTILS_API uuid uuid_generator::generate_random() {
-  uuid ret;
+  uuid ret;  // NOLINT(cppcoreguidelines-pro-type-member-init)
 
 #  if defined(ATFRAMEWORK_UTILS_ENABLE_LIBUUID) && ATFRAMEWORK_UTILS_ENABLE_LIBUUID
   uuid_t linux_uid;
@@ -672,7 +676,7 @@ ATFRAMEWORK_UTILS_API std::string uuid_generator::generate_string_random(bool re
 }
 
 ATFRAMEWORK_UTILS_API uuid uuid_generator::generate_time() {
-  uuid ret;
+  uuid ret;  // NOLINT(cppcoreguidelines-pro-type-member-init)
 
 #  if defined(ATFRAMEWORK_UTILS_ENABLE_LIBUUID) && ATFRAMEWORK_UTILS_ENABLE_LIBUUID
   uuid_t linux_uid;
