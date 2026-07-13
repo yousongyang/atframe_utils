@@ -7,13 +7,13 @@ commands, caveats, and examples here.
 
 | Skill | Description |
 | --- | --- |
-| `build/` | Configure and build atframe_utils with CMake |
+| `build/` | Configure/build atframe_utils and edit or review CMake generation rules |
 | `testing/` | Run and write private-framework unit tests |
 | `ai-agent-maintenance/` | Audit and optimize AI agent prompts, bridge files, and skills |
 
 ## When to read what
 
-- If you want to **build**: start with `build/SKILL.md`.
+- If you want to **build or edit/review CMake generation rules**: start with `build/SKILL.md`.
 - If you want to **run or write unit tests**: start with `testing/SKILL.md`.
 - If you are updating AI agent prompts or skills: see `ai-agent-maintenance/SKILL.md`.
 

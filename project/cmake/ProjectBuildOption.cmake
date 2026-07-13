@@ -429,7 +429,7 @@ check_cxx_source_compiles(
   "#include <iostream>
 #include <stacktrace>
 
-void func() { std::cout << std::stacktrace::current() << '\\n'; }
+void func() { std::cout << std::stacktrace::current() << std::endl; }
 
 int main() {
   func();
@@ -467,4 +467,3 @@ option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries
 if(ATFRAMEWORK_UTILS_ENABLE_CXX_GSL)
   include("${CMAKE_CURRENT_LIST_DIR}/GSLSupport.cmake")
 endif()
-

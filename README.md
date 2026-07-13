@@ -54,6 +54,13 @@ cmake --build . --target INSTALL # using clang or gcc
 # cmake --build . --config RelWithDebInfo --target INSTALL # using MSVC
 ~~~~~~~~~~
 
+## Incremental build hygiene
+
+Code and resources consumed by CMake targets must not be touched or overwritten when content is unchanged, including
+generated and copied files. Declare real `OUTPUT`, `BYPRODUCTS`, `DEPENDS`, and `DEPFILE` relationships, and use
+content-stable generation or temporary output plus `cmake -E copy_if_different`. Only a dedicated stamp that is not a
+compiled or packaged input may be touched unconditionally.
+
 ## Clangd 配置参考
 
 本仓库默认使用 `build_jobs_cmake_tools` 作为编译数据库目录（由 CMake 生成 `compile_commands.json`）。建议保持与当前设置一致：
