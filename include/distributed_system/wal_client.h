@@ -100,18 +100,12 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
   };
   using configure_pointer = typename wal_mt_mode_data_trait<configure_type, log_operator_type::mt_mode>::strong_ptr;
 
-  template <class...>
-  struct __receive_log_enable_if_guard;
-
-  template <>
-  struct __receive_log_enable_if_guard<> : std::enable_if<true> {};
+  template <class... ArgsT>
+  struct __receive_log_enable_if_guard : std::enable_if<true> {};
 
   template <class OneArg>
   struct __receive_log_enable_if_guard<OneArg>
       : std::enable_if<!std::is_same<nostd::remove_cvref_t<OneArg>, log_pointer>::value> {};
-
-  template <class OneArg, class... MoreArgs>
-  struct __receive_log_enable_if_guard<OneArg, MoreArgs...> : std::enable_if<true> {};
 
   template <class... ArgsT>
   using __receive_log_enable_if_guard_t = typename __receive_log_enable_if_guard<ArgsT...>::type;
