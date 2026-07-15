@@ -469,6 +469,57 @@ CASE_TEST(wal_client, receive_snapshot_mt) {
   }
 }
 
+// set_received_snapshot/get_received_snapshot
+CASE_TEST(wal_client, received_snapshot_flag_mt) {
+  atfw::util::distributed_system::wal_time_point now = std::chrono::system_clock::now();
+  test_wal_client_storage_type storage;
+  test_wal_client_context ctx;
+
+  auto conf = create_configure();
+  conf->require_snapshot = true;
+  auto vtable = create_vtable();
+  auto client = test_wal_client_type::create(now, vtable, conf, &storage);
+  CASE_EXPECT_TRUE(!!client);
+  if (!client) {
+    return;
+  }
+
+  // Default value should be false
+  CASE_EXPECT_FALSE(client->get_received_snapshot());
+
+  // set/get round-trip
+  client->set_received_snapshot(true);
+  CASE_EXPECT_TRUE(client->get_received_snapshot());
+  client->set_received_snapshot(false);
+  CASE_EXPECT_FALSE(client->get_received_snapshot());
+
+  // With require_snapshot=true and received_snapshot=false, receive_log should be rejected
+  std::vector<test_wal_client_log_type> logs;
+  logs.push_back(test_wal_client_log_type{now, 124, test_wal_client_log_action::kDoNothing, 124});
+  logs[0].hash_code = test_wal_client_log_hash(0, logs[0].log_key);
+
+  CASE_EXPECT_EQ(static_cast<int32_t>(atfw::util::distributed_system::wal_result_code::kClientRequireSnapshot),
+                 static_cast<int32_t>(client->receive_log(ctx, logs[0])));
+
+  // After set_received_snapshot(true), receive_log should succeed
+  client->set_received_snapshot(true);
+  CASE_EXPECT_EQ(static_cast<int32_t>(atfw::util::distributed_system::wal_result_code::kOk),
+                 static_cast<int32_t>(client->receive_log(ctx, logs[0])));
+  CASE_EXPECT_TRUE(client->get_received_snapshot());
+
+  // set_received_snapshot(false) blocks receive_log again (require_snapshot check comes first)
+  client->set_received_snapshot(false);
+  CASE_EXPECT_FALSE(client->get_received_snapshot());
+  CASE_EXPECT_EQ(static_cast<int32_t>(atfw::util::distributed_system::wal_result_code::kClientRequireSnapshot),
+                 static_cast<int32_t>(client->receive_log(ctx, logs[0])));
+
+  // receive_snapshot should set received_snapshot_ to true
+  test_wal_client_storage_type snapshot_storage;
+  CASE_EXPECT_TRUE(atfw::util::distributed_system::wal_result_code::kOk ==
+                   client->receive_snapshot(snapshot_storage, ctx));
+  CASE_EXPECT_TRUE(client->get_received_snapshot());
+}
+
 CASE_TEST(wal_client, receive_logs_mt) {
   atfw::util::distributed_system::wal_time_point now = std::chrono::system_clock::now();
   test_wal_client_storage_type storage;
@@ -989,6 +1040,57 @@ CASE_TEST(wal_client, receive_snapshot_st) {
   }
 }
 
+// set_received_snapshot/get_received_snapshot
+CASE_TEST(wal_client, received_snapshot_flag_st) {
+  atfw::util::distributed_system::wal_time_point now = std::chrono::system_clock::now();
+  test_wal_client_storage_type storage;
+  test_wal_client_context ctx;
+
+  auto conf = create_configure();
+  conf->require_snapshot = true;
+  auto vtable = create_vtable();
+  auto client = test_wal_client_type::create(now, vtable, conf, &storage);
+  CASE_EXPECT_TRUE(!!client);
+  if (!client) {
+    return;
+  }
+
+  // Default value should be false
+  CASE_EXPECT_FALSE(client->get_received_snapshot());
+
+  // set/get round-trip
+  client->set_received_snapshot(true);
+  CASE_EXPECT_TRUE(client->get_received_snapshot());
+  client->set_received_snapshot(false);
+  CASE_EXPECT_FALSE(client->get_received_snapshot());
+
+  // With require_snapshot=true and received_snapshot=false, receive_log should be rejected
+  std::vector<test_wal_client_log_type> logs;
+  logs.push_back(test_wal_client_log_type{now, 124, test_wal_client_log_action::kDoNothing, 124});
+  logs[0].hash_code = test_wal_client_log_hash(0, logs[0].log_key);
+
+  CASE_EXPECT_EQ(static_cast<int32_t>(atfw::util::distributed_system::wal_result_code::kClientRequireSnapshot),
+                 static_cast<int32_t>(client->receive_log(ctx, logs[0])));
+
+  // After set_received_snapshot(true), receive_log should succeed
+  client->set_received_snapshot(true);
+  CASE_EXPECT_EQ(static_cast<int32_t>(atfw::util::distributed_system::wal_result_code::kOk),
+                 static_cast<int32_t>(client->receive_log(ctx, logs[0])));
+  CASE_EXPECT_TRUE(client->get_received_snapshot());
+
+  // set_received_snapshot(false) blocks receive_log again (require_snapshot check comes first)
+  client->set_received_snapshot(false);
+  CASE_EXPECT_FALSE(client->get_received_snapshot());
+  CASE_EXPECT_EQ(static_cast<int32_t>(atfw::util::distributed_system::wal_result_code::kClientRequireSnapshot),
+                 static_cast<int32_t>(client->receive_log(ctx, logs[0])));
+
+  // receive_snapshot should set received_snapshot_ to true
+  test_wal_client_storage_type snapshot_storage;
+  CASE_EXPECT_TRUE(atfw::util::distributed_system::wal_result_code::kOk ==
+                   client->receive_snapshot(snapshot_storage, ctx));
+  CASE_EXPECT_TRUE(client->get_received_snapshot());
+}
+
 CASE_TEST(wal_client, receive_logs_st) {
   atfw::util::distributed_system::wal_time_point now = std::chrono::system_clock::now();
   test_wal_client_storage_type storage;
@@ -1116,4 +1218,3 @@ CASE_TEST(wal_client, receive_hole_logs_st) {
   CASE_EXPECT_NE(old_hash_code, new_hash_code);
 }
 }  // namespace st
-

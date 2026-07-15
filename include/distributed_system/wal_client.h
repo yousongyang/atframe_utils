@@ -10,7 +10,11 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <type_traits>
 #include <utility>
+
+#include "config/compile_optimize.h"
+#include "nostd/type_traits.h"
 
 #include "distributed_system/wal_common_defs.h"
 #include "distributed_system/wal_object.h"
@@ -95,6 +99,22 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
     duration subscriber_heartbeat_retry_interval;
   };
   using configure_pointer = typename wal_mt_mode_data_trait<configure_type, log_operator_type::mt_mode>::strong_ptr;
+
+  template <class...>
+  struct __receive_log_enable_if_guard;
+
+  template <>
+  struct __receive_log_enable_if_guard<> : std::enable_if<true> {};
+
+  template <class OneArg>
+  struct __receive_log_enable_if_guard<OneArg>
+      : std::enable_if<!std::is_same<nostd::remove_cvref_t<OneArg>, log_pointer>::value> {};
+
+  template <class OneArg, class... MoreArgs>
+  struct __receive_log_enable_if_guard<OneArg, MoreArgs...> : std::enable_if<true> {};
+
+  template <class... ArgsT>
+  using __receive_log_enable_if_guard_t = typename __receive_log_enable_if_guard<ArgsT...>::type;
 
  private:
   UTIL_DESIGN_PATTERN_NOMOVABLE(wal_client);
@@ -304,31 +324,37 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
    * @brief Get private data
    * @return The private data
    */
-  inline const private_data_type& get_private_data() const noexcept { return wal_object_->get_private_data(); }
+  ATFW_UTIL_FORCEINLINE const private_data_type& get_private_data() const noexcept {
+    return wal_object_->get_private_data();
+  }
 
   /**
    * @brief Get private data
    * @return The private data
    */
-  inline private_data_type& get_private_data() noexcept { return wal_object_->get_private_data(); }
+  ATFW_UTIL_FORCEINLINE private_data_type& get_private_data() noexcept { return wal_object_->get_private_data(); }
 
   /**
    * @brief Get the function to compare logs
    * @return The function to compare logs
    */
-  inline const log_key_compare_type& get_log_key_compare() const noexcept { return wal_object_->get_log_key_compare(); }
+  ATFW_UTIL_FORCEINLINE const log_key_compare_type& get_log_key_compare() const noexcept {
+    return wal_object_->get_log_key_compare();
+  }
 
   /**
    * @brief Get the function to compare logs
    * @return The function to compare logs
    */
-  inline log_key_compare_type& get_log_key_compare() noexcept { return wal_object_->get_log_key_compare(); }
+  ATFW_UTIL_FORCEINLINE log_key_compare_type& get_log_key_compare() noexcept {
+    return wal_object_->get_log_key_compare();
+  }
 
   /**
    * @brief Get the configure of this wal_client
    * @return The configure of this wal_client
    */
-  inline const configure_type& get_configure() const noexcept {
+  ATFW_UTIL_FORCEINLINE const configure_type& get_configure() const noexcept {
     // We can not create wal_object without configure, so it's safe here
     return *configure_;
   }
@@ -337,7 +363,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
    * @brief Get the configure of this wal_client
    * @return The configure of this wal_client
    */
-  inline configure_type& get_configure() noexcept {
+  ATFW_UTIL_FORCEINLINE configure_type& get_configure() noexcept {
     // We can not create wal_object without configure, so it's safe here
     return *configure_;
   }
@@ -410,13 +436,13 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
    * @brief Set the next heartbeat time point
    * @param t The next heartbeat time point
    */
-  inline void set_next_heartbeat_timepoint(time_point t) noexcept { next_heartbeat_timepoint_ = t; }
+  ATFW_UTIL_FORCEINLINE void set_next_heartbeat_timepoint(time_point t) noexcept { next_heartbeat_timepoint_ = t; }
 
   /**
    * @brief Get the next heartbeat time point
    * @return The next heartbeat time point
    */
-  inline time_point get_next_heartbeat_timepoint() const noexcept { return next_heartbeat_timepoint_; }
+  ATFW_UTIL_FORCEINLINE time_point get_next_heartbeat_timepoint() const noexcept { return next_heartbeat_timepoint_; }
 
   /**
    * @brief Receive log from publisher, it's assumed that the logs have not holes
@@ -477,7 +503,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
    * @param args The args to construct the received log
    * @return The result code
    */
-  template <class... LogCtorArgsT>
+  template <class... LogCtorArgsT, class = __receive_log_enable_if_guard_t<LogCtorArgsT...>>
   wal_result_code receive_log(callback_param_type param, LogCtorArgsT&&... args) {
     return receive_log(param, log_operator_type::template make_strong<log_type>(std::forward<LogCtorArgsT>(args)...));
   }
@@ -560,7 +586,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
    * @param args The args to construct the received log
    * @return The result code
    */
-  template <class... LogCtorArgsT>
+  template <class... LogCtorArgsT, class = __receive_log_enable_if_guard_t<LogCtorArgsT...>>
   wal_result_code receive_hole_log(callback_param_type param, LogCtorArgsT&&... args) {
     return receive_hole_log(param,
                             log_operator_type::template make_strong<log_type>(std::forward<LogCtorArgsT>(args)...));
@@ -635,6 +661,10 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
    * @return The last finished log key or nullptr if not set
    */
   const log_key_type* get_last_finished_log_key() const { return last_finished_log_key_.get(); }
+
+  ATFW_UTIL_FORCEINLINE void set_received_snapshot(bool received) noexcept { received_snapshot_ = received; }
+
+  ATFW_UTIL_FORCEINLINE bool get_received_snapshot() const noexcept { return received_snapshot_; }
 
  private:
   vtable_pointer vtable_;
