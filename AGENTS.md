@@ -16,11 +16,20 @@ helpers.
 - `src/`: implementation files.
 - `test/`: private unit test framework and test cases.
 - `sample/`, `tools/`: examples and utilities.
-- `.agents/skills/`: build, testing, and AI-agent maintenance playbooks.
+- `.agents/skills/`: engineering, build, testing, and AI-agent maintenance playbooks.
 
 ## Always-On Rules
 
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
+- Start with the current task, nearest instructions, Skill index, and capabilities actually exposed by the active agent
+  harness. Load full Skill bodies or tool-specific directories only when the task routes there; do not assume or install
+  absent workflows, tools, modes, or extensions.
+- Before a nontrivial plan or edit, inspect the relevant code, configs, docs, generated sources, tests, and current
+  official docs for mutable external behavior. Separate verified facts from assumptions, then state the smallest plan
+  and verification path.
+- Match process to risk: use the shortest verified path for small changes; read `change-workflow` for defects and for
+  cross-module behavior, public API/ABI, data model/migration, security, or deployment changes. Keep their scope and
+  acceptance in one existing authoritative artifact or active task plan; do not initialize a methodology for ceremony.
 - Never unconditionally `touch` or same-content overwrite code/resources consumed by `add_custom_command`,
   `add_custom_target`, `add_executable`, `add_library`, `target_sources`, or another dependency edge, whether generated,
   copied, or non-handwritten. Use content-stable writes and accurate `OUTPUT`/`BYPRODUCTS`/`DEPENDS`/`DEPFILE`; only
@@ -30,17 +39,18 @@ helpers.
   tree; if no user setting is readable, use `build`.
 - Put all CMake build trees, AI scratch files, script output/logs, and temporary data under `<BUILD_DIR>/...`; for agent
   scratch use `<BUILD_DIR>/_agent_tmp/...`. Never create ad-hoc temp files in the repository root.
-- Read the matching `.agents/skills/*/SKILL.md` before build or test work; skills contain commands and edge cases.
+- Read the matching `.agents/skills/*/SKILL.md` before C++ edit/review, build, or test work.
 - After C++ edits, run `clang-format -i <file>` and verify with `clang-format --dry-run --Werror <file>` when practical.
 
 ## C++ Conventions
 
 1. **Namespace**: public code is under `atfw::util`.
 2. **Include guards**: use `#pragma once`.
-3. **Header code**: any function, method, friend, or operator body written in a header must use
-   `ATFW_UTIL_FORCEINLINE`; avoid plain `inline` for project code unless matching generated or third-party code.
-4. **Exported ABI**: interfaces declared with `ATFRAMEWORK_UTILS_API` or other `*_API` export macros must be implemented
-   in `.cpp` files, not headers, so ABI stays stable across compilers and build options.
+3. **Header/API visibility**: public non-template APIs must use `ATFRAMEWORK_UTILS_API` (or the matching `*_API` macro)
+   or `ATFW_UTIL_FORCEINLINE`; public template functions defined in headers may use `ATFW_UTIL_SYMBOL_VISIBLE`. Read
+   `engineering-guidelines` for the ODR and internal-only rules.
+4. **Exported ABI**: keep non-template implementations covered by `ATFRAMEWORK_UTILS_API` or another `*_API` macro in
+   `.cpp` files so ABI stays stable across compilers and build options.
 5. **Naming**: classes/functions use `snake_case`; constants use `UPPER_SNAKE_CASE`; member variables use trailing `_`.
 6. **Error handling**: use return codes or `nostd::result` types as existing code does.
 7. **Anonymous namespace + static**: in `.cpp` files, file-local functions should be inside an anonymous namespace **and**
@@ -58,6 +68,8 @@ Read the matching `.agents/skills/*/SKILL.md` before specialized work:
 
 | Skill | Use when |
 | --- | --- |
+| `engineering-guidelines` | Writing/reviewing C++, header template visibility, or exported API ABI |
+| `change-workflow` | Diagnosing defects or delivering nontrivial/high-risk changes with a reviewable contract |
 | `build` | Configuring or building with CMake |
 | `testing` | Running or writing private test-framework cases |
 | `ai-agent-maintenance` | Auditing or optimizing AI agent prompts, bridge files, and skills |
