@@ -300,14 +300,6 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     logs_.swap(source);
     source.clear();
 
-    if (vtable_ && vtable_->get_hash_code && vtable_->set_hash_code && vtable_->calculate_hash_code) {
-      hash_code_type hash_code = hash_code_traits::initial_hash_code();
-      for (auto& log : logs_) {
-        hash_code = vtable_->calculate_hash_code(*this, hash_code, *log);
-        vtable_->set_hash_code(*this, *log, hash_code);
-      }
-    }
-
     for (auto& fn : internal_event_on_assign_) {
       if (!fn) {
         continue;
