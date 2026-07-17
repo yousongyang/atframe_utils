@@ -6,6 +6,7 @@
 #pragma once
 
 #include <config/atframe_utils_build_feature.h>
+#include <config/compile_optimize.h>
 #include <config/compiler_features.h>
 
 #include <design_pattern/result_type.h>
@@ -30,9 +31,9 @@ struct ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_meta_type {
   LogKeyT log_key;
   ActionCaseT action_case;
 
-  inline wal_meta_type() = default;
+  ATFW_UTIL_FORCEINLINE wal_meta_type() = default;
   template <class ToTimepointT, class ToLogKeyT, class ToActionCaseT>
-  inline wal_meta_type(ToTimepointT&& t, ToLogKeyT&& k, ToActionCaseT&& act)
+  ATFW_UTIL_FORCEINLINE wal_meta_type(ToTimepointT&& t, ToLogKeyT&& k, ToActionCaseT&& act)
       : timepoint(std::forward<ToTimepointT>(t)),
         log_key(std::forward<ToLogKeyT>(k)),
         action_case(std::forward<ToActionCaseT>(act)) {}
@@ -109,23 +110,23 @@ struct ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_mt_mode_func_trait<wal_mt_mode::kSing
   using enable_shared_from_this = memory::enable_shared_rc_from_this<Y>;
 
   template <class Y, class Alloc, class... ArgsT>
-  static inline memory::strong_rc_ptr<Y> allocate_strong(const Alloc& alloc, ArgsT&&... args) {
+  ATFW_UTIL_FORCEINLINE static memory::strong_rc_ptr<Y> allocate_strong(const Alloc& alloc, ArgsT&&... args) {
     return memory::allocate_strong_rc<Y>(alloc, std::forward<ArgsT>(args)...);
   }
 
   template <class Y, class F>
-  static inline memory::strong_rc_ptr<Y> static_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static memory::strong_rc_ptr<Y> static_pointer_cast(F&& f) {
     return memory::static_pointer_cast<Y>(std::forward<F>(f));
   }
 
   template <class Y, class F>
-  static inline memory::strong_rc_ptr<Y> const_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static memory::strong_rc_ptr<Y> const_pointer_cast(F&& f) {
     return memory::const_pointer_cast<Y>(std::forward<F>(f));
   }
 
 #if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
   template <class Y, class F>
-  static inline memory::strong_rc_ptr<Y> dynamic_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static memory::strong_rc_ptr<Y> dynamic_pointer_cast(F&& f) {
     return memory::dynamic_pointer_cast<Y>(std::forward<F>(f));
   }
 #endif
@@ -137,7 +138,7 @@ struct ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_mt_mode_func_trait<wal_mt_mode::kMult
   using enable_shared_from_this = std::enable_shared_from_this<Y>;
 
   template <class Y, class Alloc, class... ArgsT>
-  static inline std::shared_ptr<Y> allocate_strong(const Alloc& alloc, ArgsT&&... args) {
+  ATFW_UTIL_FORCEINLINE static std::shared_ptr<Y> allocate_strong(const Alloc& alloc, ArgsT&&... args) {
     // NOLINTNEXTLINE(build/include, readability-duplicate-include, unused-includes)
 #include "config/compiler/internal/stl_compact_prefix.h.inc"  // IWYU pragma: keep
     return std::allocate_shared<Y>(alloc, std::forward<ArgsT>(args)...);
@@ -146,18 +147,18 @@ struct ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_mt_mode_func_trait<wal_mt_mode::kMult
   }
 
   template <class Y, class F>
-  static inline std::shared_ptr<Y> static_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static std::shared_ptr<Y> static_pointer_cast(F&& f) {
     return std::static_pointer_cast<Y>(std::forward<F>(f));
   }
 
   template <class Y, class F>
-  static inline std::shared_ptr<Y> const_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static std::shared_ptr<Y> const_pointer_cast(F&& f) {
     return std::const_pointer_cast<Y>(std::forward<F>(f));
   }
 
 #if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
   template <class Y, class F>
-  static inline std::shared_ptr<Y> dynamic_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static std::shared_ptr<Y> dynamic_pointer_cast(F&& f) {
     return std::dynamic_pointer_cast<Y>(std::forward<F>(f));
   }
 #endif
@@ -167,9 +168,9 @@ template <class /*LogKeyT*/, class /*LogT*/>
 struct ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_hash_code_traits {
   using hash_code_type = size_t;
 
-  static inline hash_code_type initial_hash_code() noexcept { return 0; }
-  static inline bool validate(const hash_code_type& hash_code) noexcept { return 0 != hash_code; }
-  static inline bool equal(const hash_code_type& l, const hash_code_type& r) noexcept { return l == r; }
+  ATFW_UTIL_FORCEINLINE static hash_code_type initial_hash_code() noexcept { return 0; }
+  ATFW_UTIL_FORCEINLINE static bool validate(const hash_code_type& hash_code) noexcept { return 0 != hash_code; }
+  ATFW_UTIL_FORCEINLINE static bool equal(const hash_code_type& l, const hash_code_type& r) noexcept { return l == r; }
 };
 
 // NOLINTBEGIN(whitespace/indent_namespace)
@@ -190,7 +191,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_operator {
   using action_case_hash = HashActionCaseT;
   using action_case_equal = EqualActionCaseT;
 
-  static UTIL_CONFIG_CONSTEXPR const wal_mt_mode mt_mode = MTMode;
+  static constexpr const wal_mt_mode mt_mode = MTMode;
 
   using log_pointer = typename wal_mt_mode_data_trait<log_type, mt_mode>::strong_ptr;
   using log_const_pointer = typename wal_mt_mode_data_trait<const log_type, mt_mode>::strong_ptr;
@@ -199,7 +200,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_operator {
       ATFRAMEWORK_UTILS_NAMESPACE_ID::design_pattern::result_type<log_key_type, wal_result_code>;
 
   template <class Y, class... ArgsT>
-  static inline typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr make_strong(ArgsT&&... args) {
+  ATFW_UTIL_FORCEINLINE static typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr make_strong(ArgsT&&... args) {
     // NOLINTNEXTLINE(build/include, readability-duplicate-include)
 #include "config/compiler/internal/stl_compact_prefix.h.inc"  // IWYU pragma: keep
     using alloc_type = typename std::allocator_traits<log_allocator>::template rebind_alloc<Y>;
@@ -209,8 +210,8 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_operator {
   }
 
   template <class Y, class Alloc, class... ArgsT>
-  static inline typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr allocate_strong(const Alloc& alloc,
-                                                                                        ArgsT&&... args) {
+  ATFW_UTIL_FORCEINLINE static typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr allocate_strong(
+      const Alloc& alloc, ArgsT&&... args) {
     // NOLINTNEXTLINE(build/include, readability-duplicate-include)
 #include "config/compiler/internal/stl_compact_prefix.h.inc"  // IWYU pragma: keep
     return wal_mt_mode_func_trait<mt_mode>::template allocate_strong<Y>(alloc, std::forward<ArgsT>(args)...);
@@ -219,18 +220,18 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_log_operator {
   }
 
   template <class Y, class F>
-  static inline typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr static_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr static_pointer_cast(F&& f) {
     return wal_mt_mode_func_trait<mt_mode>::template static_pointer_cast<Y>(std::forward<F>(f));
   }
 
   template <class Y, class F>
-  static inline typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr const_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr const_pointer_cast(F&& f) {
     return wal_mt_mode_func_trait<mt_mode>::template const_pointer_cast<Y>(std::forward<F>(f));
   }
 
 #if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
   template <class Y, class F>
-  static inline typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr dynamic_pointer_cast(F&& f) {
+  ATFW_UTIL_FORCEINLINE static typename wal_mt_mode_data_trait<Y, mt_mode>::strong_ptr dynamic_pointer_cast(F&& f) {
     return wal_mt_mode_func_trait<mt_mode>::template dynamic_pointer_cast<Y>(std::forward<F>(f));
   }
 #endif

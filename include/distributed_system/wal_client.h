@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <functional>
 #include <limits>
+#include <list>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -134,7 +135,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
         next_heartbeat_timepoint_(helper.next_heartbeat),
         received_snapshot_(false) {
     if (wal_object_) {
-      wal_object_->set_internal_event_on_assign_logs([this](object_type& wal) {
+      internal_event_on_assign_logs_iter_ = wal_object_->set_internal_event_on_assign_logs([this](object_type& wal) {
         // reset finished key
         if (!wal.get_all_logs().empty() && this->vtable_ && this->vtable_->get_log_key) {
           auto log_key = this->vtable_->get_log_key(wal, **wal.get_all_logs().rbegin());
@@ -145,6 +146,12 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
           }
         }
       });
+    }
+  }
+
+  ~wal_client() {
+    if (wal_object_) {
+      wal_object_->remove_internal_event_on_assign_logs(internal_event_on_assign_logs_iter_);
     }
   }
 
@@ -666,6 +673,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
 
   // logs
   wal_object_ptr_type wal_object_;
+  std::list<typename object_type::callback_log_event_on_assign_fn_t>::iterator internal_event_on_assign_logs_iter_;
 
   // publish-subscribe
   time_point next_heartbeat_timepoint_;

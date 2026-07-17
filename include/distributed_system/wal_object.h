@@ -223,8 +223,14 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     }
 
     wal_result_code ret = vtable_->load(*this, storage, param);
-    if (wal_result_code::kOk == ret && internal_event_on_loaded_) {
-      internal_event_on_loaded_(*this, storage, param);
+    if (wal_result_code::kOk == ret) {
+      for (auto& fn : internal_event_on_loaded_) {
+        if (!fn) {
+          continue;
+        }
+
+        fn(*this, storage, param);
+      }
     }
     return ret;
   }
@@ -239,8 +245,14 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     }
 
     wal_result_code ret = vtable_->dump(*this, storage, param);
-    if (wal_result_code::kOk == ret && internal_event_on_dumped_) {
-      internal_event_on_dumped_(*this, storage, param);
+    if (wal_result_code::kOk == ret) {
+      for (auto& fn : internal_event_on_dumped_) {
+        if (!fn) {
+          continue;
+        }
+
+        fn(*this, storage, param);
+      }
     }
     return ret;
   }
@@ -258,16 +270,12 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     logs_.clear();
     logs_.assign(std::forward<IteratorT>(begin), std::forward<IteratorT>(end));
 
-    if (vtable_ && vtable_->get_hash_code && vtable_->set_hash_code && vtable_->calculate_hash_code) {
-      hash_code_type hash_code = hash_code_traits::initial_hash_code();
-      for (auto& log : logs_) {
-        hash_code = vtable_->calculate_hash_code(*this, hash_code, *log);
-        vtable_->set_hash_code(*this, *log, hash_code);
+    for (auto& fn : internal_event_on_assign_) {
+      if (!fn) {
+        continue;
       }
-    }
 
-    if (internal_event_on_assign_) {
-      internal_event_on_assign_(*this);
+      fn(*this);
     }
   }
 
@@ -300,8 +308,12 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
       }
     }
 
-    if (internal_event_on_assign_) {
-      internal_event_on_assign_(*this);
+    for (auto& fn : internal_event_on_assign_) {
+      if (!fn) {
+        continue;
+      }
+
+      fn(*this);
     }
   }
 
@@ -930,8 +942,12 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     }
 
     // Callback and push back log
-    if (internal_event_on_add_log_) {
-      internal_event_on_add_log_(*this, log);
+    for (auto& fn : internal_event_on_add_log_) {
+      if (!fn) {
+        continue;
+      }
+
+      fn(*this, log);
     }
 
     logs_.push_back(log);
@@ -1027,8 +1043,12 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     }
 
     // Callback and push back log
-    if (internal_event_on_add_log_) {
-      internal_event_on_add_log_(*this, log);
+    for (auto& fn : internal_event_on_add_log_) {
+      if (!fn) {
+        continue;
+      }
+
+      fn(*this, log);
     }
 
     logs_.insert(iter, log);
@@ -1068,13 +1088,75 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
   using callback_log_event_on_assign_fn_t = std::function<void(wal_object&)>;
   using callback_log_event_on_add_log_fn_t = std::function<void(wal_object&, const log_pointer&)>;
 
-  void set_internal_event_on_assign_logs(callback_log_event_on_assign_fn_t fn) { internal_event_on_assign_ = fn; }
+  std::list<callback_log_event_on_assign_fn_t>::iterator set_internal_event_on_assign_logs(
+      callback_log_event_on_assign_fn_t fn) {
+    if (!fn) {
+      return internal_event_on_assign_.end();
+    }
 
-  void set_internal_event_on_assign_logs(callback_log_event_on_add_log_fn_t fn) { internal_event_on_add_log_ = fn; }
+    return internal_event_on_assign_.insert(internal_event_on_assign_.end(), fn);
+  }
 
-  void set_internal_event_on_loaded(callback_load_fn_t fn) { internal_event_on_loaded_ = fn; }
+  bool remove_internal_event_on_assign_logs(std::list<callback_log_event_on_assign_fn_t>::iterator iter) {
+    if (iter == internal_event_on_assign_.end()) {
+      return false;
+    }
 
-  void set_internal_event_on_dumped(callback_dump_fn_t fn) { internal_event_on_dumped_ = fn; }
+    internal_event_on_assign_.erase(iter);
+    return true;
+  }
+
+  std::list<callback_log_event_on_add_log_fn_t>::iterator set_internal_event_on_add_log(
+      callback_log_event_on_add_log_fn_t fn) {
+    if (!fn) {
+      return internal_event_on_add_log_.end();
+    }
+
+    return internal_event_on_add_log_.insert(internal_event_on_add_log_.end(), fn);
+  }
+
+  bool remove_internal_event_on_add_log(std::list<callback_log_event_on_add_log_fn_t>::iterator iter) {
+    if (iter == internal_event_on_add_log_.end()) {
+      return false;
+    }
+
+    internal_event_on_add_log_.erase(iter);
+    return true;
+  }
+
+  std::list<callback_load_fn_t>::iterator set_internal_event_on_loaded(callback_load_fn_t fn) {
+    if (!fn) {
+      return internal_event_on_loaded_.end();
+    }
+
+    return internal_event_on_loaded_.insert(internal_event_on_loaded_.end(), fn);
+  }
+
+  bool remove_internal_event_on_loaded(std::list<callback_load_fn_t>::iterator iter) {
+    if (iter == internal_event_on_loaded_.end()) {
+      return false;
+    }
+
+    internal_event_on_loaded_.erase(iter);
+    return true;
+  }
+
+  std::list<callback_dump_fn_t>::iterator set_internal_event_on_dumped(callback_dump_fn_t fn) {
+    if (!fn) {
+      return internal_event_on_dumped_.end();
+    }
+
+    return internal_event_on_dumped_.insert(internal_event_on_dumped_.end(), fn);
+  }
+
+  bool remove_internal_event_on_dumped(std::list<callback_dump_fn_t>::iterator iter) {
+    if (iter == internal_event_on_dumped_.end()) {
+      return false;
+    }
+
+    internal_event_on_dumped_.erase(iter);
+    return true;
+  }
 
  private:
   bool in_log_action_callback_;
@@ -1094,10 +1176,10 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
   std::list<std::pair<log_pointer, callback_param_storage_type>, pending_log_allocator> pending_logs_;
 
   // internal events
-  callback_log_event_on_assign_fn_t internal_event_on_assign_;
-  callback_log_event_on_add_log_fn_t internal_event_on_add_log_;
-  callback_load_fn_t internal_event_on_loaded_;
-  callback_dump_fn_t internal_event_on_dumped_;
+  std::list<callback_log_event_on_assign_fn_t> internal_event_on_assign_;
+  std::list<callback_log_event_on_add_log_fn_t> internal_event_on_add_log_;
+  std::list<callback_load_fn_t> internal_event_on_loaded_;
+  std::list<callback_dump_fn_t> internal_event_on_dumped_;
 };
 
 }  // namespace distributed_system

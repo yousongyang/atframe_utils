@@ -999,6 +999,12 @@ CASE_TEST(wal_object, load_and_dump_st) {
   load_storege.logs.push_back(
       test_wal_object_log_type{now, 126, test_wal_object_log_action::kRecursivePushBack, 126, 0});
 
+  size_t previous_hash_code = 0;
+  for (auto& log : load_storege.logs) {
+    log.hash_code = test_wal_object_log_hash(previous_hash_code, log.log_key);
+    previous_hash_code = log.hash_code;
+  }
+
   test_wal_object_log_storage_type storage;
   test_wal_object_context ctx;
 

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <functional>
 #include <limits>
+#include <list>
 #include <memory>
 #include <utility>
 
@@ -155,7 +156,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_publisher {
         wal_object_(helper.wal_object),
         subscriber_manager_(helper.subscriber_manager) {
     if (wal_object_) {
-      wal_object_->set_internal_event_on_assign_logs([this](object_type& wal) {
+      internal_event_on_assign_logs_iter_ = wal_object_->set_internal_event_on_assign_logs([this](object_type& wal) {
         // reset broadcast
         if (!wal.get_all_logs().empty() && this->vtable_ && this->vtable_->get_log_key) {
           this->set_broadcast_key_bound(this->vtable_->get_log_key(wal, **wal.get_all_logs().rbegin()));
@@ -163,17 +164,25 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_publisher {
         broadcast_hole_logs_.clear();
       });
 
-      wal_object_->set_internal_event_on_assign_logs([this](object_type& wal, const log_pointer& log) {
-        if (!log) {
-          return;
-        }
+      internal_event_on_add_log_iter_ =
+          wal_object_->set_internal_event_on_add_log([this](object_type& wal, const log_pointer& log) {
+            if (!log) {
+              return;
+            }
 
-        if (broadcast_key_bound_ && configure_ && configure_->enable_hole_log && this->vtable_ &&
-            this->vtable_->get_log_key &&
-            wal.get_log_key_compare()(this->vtable_->get_log_key(wal, *log), *broadcast_key_bound_)) {
-          broadcast_hole_logs_.push_back(log);
-        }
-      });
+            if (broadcast_key_bound_ && configure_ && configure_->enable_hole_log && this->vtable_ &&
+                this->vtable_->get_log_key &&
+                wal.get_log_key_compare()(this->vtable_->get_log_key(wal, *log), *broadcast_key_bound_)) {
+              broadcast_hole_logs_.push_back(log);
+            }
+          });
+    }
+  }
+
+  ~wal_publisher() {
+    if (wal_object_) {
+      wal_object_->remove_internal_event_on_assign_logs(internal_event_on_assign_logs_iter_);
+      wal_object_->remove_internal_event_on_add_log(internal_event_on_add_log_iter_);
     }
   }
 
@@ -924,6 +933,8 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_publisher {
 
   // logs
   wal_object_ptr_type wal_object_;
+  std::list<typename object_type::callback_log_event_on_assign_fn_t>::iterator internal_event_on_assign_logs_iter_;
+  std::list<typename object_type::callback_log_event_on_add_log_fn_t>::iterator internal_event_on_add_log_iter_;
   subscriber_manager_ptr_type subscriber_manager_;
   subscriber_collector_type gc_subscribers_;
 
