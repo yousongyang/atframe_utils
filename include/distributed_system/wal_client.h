@@ -673,7 +673,8 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_client {
 
   // logs
   wal_object_ptr_type wal_object_;
-  std::list<typename object_type::callback_log_event_on_assign_fn_t>::iterator internal_event_on_assign_logs_iter_;
+  typename std::list<typename object_type::callback_log_event_on_assign_fn_t>::iterator
+      internal_event_on_assign_logs_iter_;
 
   // publish-subscribe
   time_point next_heartbeat_timepoint_;
