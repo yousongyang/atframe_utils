@@ -1088,7 +1088,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
   using callback_log_event_on_assign_fn_t = std::function<void(wal_object&)>;
   using callback_log_event_on_add_log_fn_t = std::function<void(wal_object&, const log_pointer&)>;
 
-  std::list<callback_log_event_on_assign_fn_t>::iterator set_internal_event_on_assign_logs(
+  typename std::list<callback_log_event_on_assign_fn_t>::iterator set_internal_event_on_assign_logs(
       callback_log_event_on_assign_fn_t fn) {
     if (!fn) {
       return internal_event_on_assign_.end();
@@ -1097,7 +1097,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     return internal_event_on_assign_.insert(internal_event_on_assign_.end(), fn);
   }
 
-  bool remove_internal_event_on_assign_logs(std::list<callback_log_event_on_assign_fn_t>::iterator iter) {
+  bool remove_internal_event_on_assign_logs(typename std::list<callback_log_event_on_assign_fn_t>::iterator iter) {
     if (iter == internal_event_on_assign_.end()) {
       return false;
     }
@@ -1106,7 +1106,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     return true;
   }
 
-  std::list<callback_log_event_on_add_log_fn_t>::iterator set_internal_event_on_add_log(
+  typename std::list<callback_log_event_on_add_log_fn_t>::iterator set_internal_event_on_add_log(
       callback_log_event_on_add_log_fn_t fn) {
     if (!fn) {
       return internal_event_on_add_log_.end();
@@ -1115,7 +1115,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     return internal_event_on_add_log_.insert(internal_event_on_add_log_.end(), fn);
   }
 
-  bool remove_internal_event_on_add_log(std::list<callback_log_event_on_add_log_fn_t>::iterator iter) {
+  bool remove_internal_event_on_add_log(typename std::list<callback_log_event_on_add_log_fn_t>::iterator iter) {
     if (iter == internal_event_on_add_log_.end()) {
       return false;
     }
@@ -1124,7 +1124,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     return true;
   }
 
-  std::list<callback_load_fn_t>::iterator set_internal_event_on_loaded(callback_load_fn_t fn) {
+  typename std::list<callback_load_fn_t>::iterator set_internal_event_on_loaded(callback_load_fn_t fn) {
     if (!fn) {
       return internal_event_on_loaded_.end();
     }
@@ -1132,7 +1132,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     return internal_event_on_loaded_.insert(internal_event_on_loaded_.end(), fn);
   }
 
-  bool remove_internal_event_on_loaded(std::list<callback_load_fn_t>::iterator iter) {
+  bool remove_internal_event_on_loaded(typename std::list<callback_load_fn_t>::iterator iter) {
     if (iter == internal_event_on_loaded_.end()) {
       return false;
     }
@@ -1141,7 +1141,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     return true;
   }
 
-  std::list<callback_dump_fn_t>::iterator set_internal_event_on_dumped(callback_dump_fn_t fn) {
+  typename std::list<callback_dump_fn_t>::iterator set_internal_event_on_dumped(callback_dump_fn_t fn) {
     if (!fn) {
       return internal_event_on_dumped_.end();
     }
@@ -1149,7 +1149,7 @@ class ATFRAMEWORK_UTILS_API_HEAD_ONLY wal_object {
     return internal_event_on_dumped_.insert(internal_event_on_dumped_.end(), fn);
   }
 
-  bool remove_internal_event_on_dumped(std::list<callback_dump_fn_t>::iterator iter) {
+  bool remove_internal_event_on_dumped(typename std::list<callback_dump_fn_t>::iterator iter) {
     if (iter == internal_event_on_dumped_.end()) {
       return false;
     }
