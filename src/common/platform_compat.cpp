@@ -4,9 +4,8 @@
 
 #include "common/platform_compat.h"
 
-#include <errno.h>
-#include <cstdlib>
-#include <cstring>
+#include <cerrno>
+#include <cstdint>
 
 ATFRAMEWORK_UTILS_NAMESPACE_BEGIN
 namespace platform {
@@ -29,6 +28,16 @@ ATFRAMEWORK_UTILS_API gsl::string_view get_strerrno(int32_t result_from_get_errn
 #endif
 }
 
+ATFRAMEWORK_UTILS_API int32_t atfork(void (*prepare)(), void (*parent)(), void (*child)()) noexcept {
+#if defined(ATFRAMEWORK_UTILS_THREAD_TLS_USE_PTHREAD) && ATFRAMEWORK_UTILS_THREAD_TLS_USE_PTHREAD
+  return ::pthread_atfork(prepare, parent, child);
+#else
+  (void)prepare;
+  (void)parent;
+  (void)child;
+  return 0;
+#endif
+}
+
 }  // namespace platform
 ATFRAMEWORK_UTILS_NAMESPACE_END
-

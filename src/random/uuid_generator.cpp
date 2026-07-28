@@ -3,6 +3,8 @@
 #include <config/compile_optimize.h>
 #include <config/compiler_features.h>
 
+#include <common/platform_compat.h>
+
 #include <lock/lock_holder.h>
 #include <lock/spin_lock.h>
 #include <random/random_generator.h>
@@ -73,9 +75,9 @@
 #    endif
 
 #    ifdef HAVE_TLS
-#      define UTIL_CONFIG_UUID_INNER_THREAD_LOCAL static __thread
+#      define ATFW_UTIL_CONFIG_UUID_INNER_THREAD_LOCAL static __thread
 #    else
-#      define UTIL_CONFIG_UUID_INNER_THREAD_LOCAL static
+#      define ATFW_UTIL_CONFIG_UUID_INNER_THREAD_LOCAL static
 #    endif
 
 #    ifdef _WIN32
@@ -175,6 +177,22 @@ static void gettimeofday(struct timeval *tv, void *) {
 static int getuid(void) { return 1; }
 #    endif
 
+static bool &uuid_generator_rand_engine_inited() {
+  static bool inited = false;
+  return inited;
+}
+
+struct ATFW_UTIL_SYMBOL_LOCAL uuid_generator_atfork_guard_t {
+  uuid_generator_atfork_guard_t() {
+    atfw::util::platform::atfork(nullptr, nullptr, []() { uuid_generator_rand_engine_inited() = false; });
+  }
+};
+
+static void uuid_generator_setup_atfork() {
+  static uuid_generator_atfork_guard_t guard;
+  (void)guard;
+}
+
 /**
  * Generate a stream of random nbytes into buf.
  * Use /dev/urandom if possible, and if not,
@@ -184,12 +202,12 @@ static void random_get_bytes(unsigned char *buf, size_t nbytes) {
   using uuid_generator_rand_engine = ATFRAMEWORK_UTILS_NAMESPACE_ID::random::mt19937_64;
   static ATFRAMEWORK_UTILS_NAMESPACE_ID::lock::spin_lock random_generator_lock;
   static uuid_generator_rand_engine random_generator;
-  static bool uuid_generator_rand_engine_inited = false;
 
   ATFRAMEWORK_UTILS_NAMESPACE_ID::lock::lock_holder<ATFRAMEWORK_UTILS_NAMESPACE_ID::lock::spin_lock> lock_guard(
       random_generator_lock);
 
-  if ATFW_UTIL_UNLIKELY_CONDITION (!uuid_generator_rand_engine_inited) {
+  if ATFW_UTIL_UNLIKELY_CONDITION (!uuid_generator_rand_engine_inited()) {
+    uuid_generator_setup_atfork();
     struct timeval tv;
     gettimeofday(&tv, 0);
     uuid_generator_rand_engine::result_type seed =
@@ -203,7 +221,7 @@ static void random_get_bytes(unsigned char *buf, size_t nbytes) {
         static_cast<uuid_generator_rand_engine::result_type>(tv.tv_usec);
 
     random_generator.init_seed(seed);
-    uuid_generator_rand_engine_inited = true;
+    uuid_generator_rand_engine_inited() = true;
     for (int i = 0; i < 256; ++i) {
       random_generator.random();
     }
@@ -338,12 +356,12 @@ struct uuid_generator_clock_file_guard_t {
     }
   }
 };
-UTIL_CONFIG_UUID_INNER_THREAD_LOCAL uuid_generator_clock_file_guard_t uuid_generator_state_file;
+ATFW_UTIL_CONFIG_UUID_INNER_THREAD_LOCAL uuid_generator_clock_file_guard_t uuid_generator_state_file;
 
 static int get_clock(uint32_t *clock_high, uint32_t *clock_low, uint16_t *ret_clock_seq) {
-  UTIL_CONFIG_UUID_INNER_THREAD_LOCAL int adjustment = 0;
-  UTIL_CONFIG_UUID_INNER_THREAD_LOCAL struct timeval last = {0, 0};
-  UTIL_CONFIG_UUID_INNER_THREAD_LOCAL uint16_t clock_seq;
+  ATFW_UTIL_CONFIG_UUID_INNER_THREAD_LOCAL int adjustment = 0;
+  ATFW_UTIL_CONFIG_UUID_INNER_THREAD_LOCAL struct timeval last = {0, 0};
+  ATFW_UTIL_CONFIG_UUID_INNER_THREAD_LOCAL uint16_t clock_seq;
   struct timeval tv;
   uint64_t clock_reg;
   mode_t save_umask;
