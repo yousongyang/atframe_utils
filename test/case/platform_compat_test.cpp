@@ -22,6 +22,8 @@ CASE_TEST(platform_compat, get_strerrno_basic) {
   char buffer[256] = {0};
   auto result = atfw::util::platform::get_strerrno(EINVAL, gsl::make_span(buffer));
   CASE_EXPECT_FALSE(result.empty());
+  CASE_EXPECT_EQ(buffer, result.data());
+  CASE_EXPECT_EQ(std::strlen(buffer), result.size());
 }
 
 CASE_TEST(platform_compat, get_strerrno_zero) {
@@ -33,9 +35,10 @@ CASE_TEST(platform_compat, get_strerrno_zero) {
 
 CASE_TEST(platform_compat, get_strerrno_small_buffer) {
   // Buffer too small (size <= 1)
-  char buffer[1] = {0};
+  char buffer[1] = {'x'};
   auto result = atfw::util::platform::get_strerrno(EINVAL, gsl::make_span(buffer, 1));
   CASE_EXPECT_TRUE(result.empty());
+  CASE_EXPECT_EQ('\0', buffer[0]);
 }
 
 CASE_TEST(platform_compat, get_strerrno_empty_buffer) {

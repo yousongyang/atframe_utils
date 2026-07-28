@@ -28,6 +28,7 @@
 #include <config/atframe_utils_build_feature.h>
 
 #include <config/compile_optimize.h>
+#include <nostd/type_traits.h>
 #include <std/explicit_declare.h>
 
 #include <memory>
@@ -135,9 +136,14 @@ class ATFW_UTIL_SYMBOL_VISIBLE allocator_adapter {
 
   template <class U>
   struct rebind {
-    using __rebind_backend_type_other = typename backend_allocator_traits::template rebind_alloc<U>;
+    // The C++ Standard forbids containers of const elements because allocator<const T> is ill-formed.
+    using __rebind_backend_type_other = typename backend_allocator_traits::template rebind_alloc<nostd::remove_cv_t<U>>;
     using other = Allocator<U, __rebind_backend_type_other>;
   };
+
+  // This static is keeping the same behaviour as it in GCC.
+  static_assert(std::is_same<typename rebind<value_type>::other, Allocator<value_type, backend_allocator_type>>::value,
+                "allocator_traits<A>::rebind_alloc<A::value_type> must be A");
 
   inline ATFRAMEWORK_UTILS_MEMORY_ALLOCATOR_CONSTEXPR allocator_adapter() noexcept(
       ::std::is_nothrow_default_constructible<backend_allocator_type>::value)
