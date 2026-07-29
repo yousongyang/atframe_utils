@@ -8,6 +8,7 @@
 
 #if defined(__unix__) || defined(__unix) || defined(__APPLE__) || defined(__CYGWIN__) || defined(_AIX) || \
     defined(__sun) || defined(__hpux)
+#  define ATFRAMEWORK_UTILS_HAS_PTHREAD 1
 #  if !defined(_GNU_SOURCE) && !defined(_POSIX_C_SOURCE) && !defined(_XOPEN_SOURCE)
 #    define _POSIX_C_SOURCE 200112L
 #  endif
@@ -18,6 +19,10 @@
 #endif
 
 #include "common/platform_compat.h"
+
+#if defined(ATFRAMEWORK_UTILS_HAS_PTHREAD) && ATFRAMEWORK_UTILS_HAS_PTHREAD
+#  include <pthread.h>
+#endif
 
 #include <cerrno>
 #include <cstddef>
@@ -95,7 +100,7 @@ ATFRAMEWORK_UTILS_API gsl::string_view get_strerrno(int32_t result_from_get_errn
 }
 
 ATFRAMEWORK_UTILS_API int32_t atfork(void (*prepare)(), void (*parent)(), void (*child)()) noexcept {
-#if defined(ATFRAMEWORK_UTILS_THREAD_TLS_USE_PTHREAD) && ATFRAMEWORK_UTILS_THREAD_TLS_USE_PTHREAD
+#if defined(ATFRAMEWORK_UTILS_HAS_PTHREAD) && ATFRAMEWORK_UTILS_HAS_PTHREAD
   return ::pthread_atfork(prepare, parent, child);
 #else
   (void)prepare;
