@@ -56,6 +56,9 @@ ATFRAMEWORK_UTILS_API bool log_formatter::check_flag(int32_t flags, int32_t chec
 ATFRAMEWORK_UTILS_API struct tm *log_formatter::get_iso_tm() {
   static THREAD_TLS time_t tm_tp = 0;
   static THREAD_TLS struct tm tm_obj;
+#ifndef NDEBUG
+  ATFRAMEWORK_UTILS_NAMESPACE_ID::time::time_utility::update();
+#endif
   if (tm_tp != ATFRAMEWORK_UTILS_NAMESPACE_ID::time::time_utility::get_sys_now()) {
     tm_tp = ATFRAMEWORK_UTILS_NAMESPACE_ID::time::time_utility::get_sys_now();
     UTIL_STRFUNC_LOCALTIME_S(&tm_tp, &tm_obj);  // lgtm [cpp/potentially-dangerous-function]
